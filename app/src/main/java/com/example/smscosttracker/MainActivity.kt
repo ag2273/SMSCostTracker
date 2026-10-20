@@ -29,7 +29,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -41,7 +40,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
-import com.example.smscosttracker.data.RawSmsStore
+import com.example.smscosttracker.data.AppDatabase
+import com.example.smscosttracker.data.TransactionImporter
 import com.example.smscosttracker.sms.SmsReader
 import com.example.smscosttracker.sms.SmsThread
 import kotlin.concurrent.thread
@@ -62,10 +62,8 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun SmsImportScreen() {
     val context = LocalContext.current
-    val store = remember { RawSmsStore(context) }
-    DisposableEffect(store) {
-        onDispose { store.close() }
-    }
+    val database = remember { AppDatabase.get(context) }
+    val importer = remember { TransactionImporter(database) }
     var hasPermission by remember {
         mutableStateOf(
             ContextCompat.checkSelfPermission(context, Manifest.permission.READ_SMS) ==
@@ -153,11 +151,13 @@ private fun SmsImportScreen() {
                     loading = true
                     thread {
                         val messages = toImport.flatMap { SmsReader.readMessages(context, it) }
-                        val inserted = store.insertAll(messages)
-                        val total = store.count()
+                        val result = importer.import(messages)
+                        val total = database.transactionDao().count()
                         Handler(Looper.getMainLooper()).post {
                             loading = false
-                            status = "Imported $inserted messages. Stored total: $total."
+                            status = "Imported ${result.rawInserted} SMS, " +
+                                "parsed ${result.parsed}, stored ${result.stored}. " +
+                                "Transactions total: $total."
                         }
                     }
                 }
