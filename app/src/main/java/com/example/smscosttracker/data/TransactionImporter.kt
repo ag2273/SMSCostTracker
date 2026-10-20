@@ -1,5 +1,6 @@
 package com.example.smscosttracker.data
 
+import com.example.smscosttracker.classification.CategoryClassifier
 import com.example.smscosttracker.parsing.Deduplicator
 import com.example.smscosttracker.parsing.TransactionParser
 import java.util.concurrent.Callable
@@ -30,6 +31,10 @@ class TransactionImporter(
             val parsed = messages.mapNotNull { parser.parse(it) }
             val existing = database.transactionDao().getAll()
             val accepted = Deduplicator.dedupe(parsed, existing)
+            val classifier = CategoryClassifier(
+                corrections = database.categoryCorrectionDao().getAll()
+                    .associate { it.merchantKey to it.category }
+            )
             accepted.forEach { candidate ->
                 database.transactionDao().insert(
                     TransactionEntity(
@@ -38,14 +43,10 @@ class TransactionImporter(
                         merchant = candidate.merchant,
                         occurredAt = candidate.occurredAt,
                         sourceAddress = candidate.sourceAddress,
-                        category = UNCATEGORIZED
+                        category = classifier.classify(candidate.merchant).displayName
                     )
                 )
             }
             ImportResult(rawInserted = rawInserted, parsed = parsed.size, stored = accepted.size)
         })
-
-    companion object {
-        const val UNCATEGORIZED = "Uncategorized"
-    }
 }

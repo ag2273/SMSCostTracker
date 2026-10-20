@@ -22,3 +22,9 @@ data class TransactionEntity(
     val sourceAddress: String,
     val category: String
 )
+
+@Entity(tableName = "category_corrections")
+data class CategoryCorrectionEntity(
+    @PrimaryKey val merchantKey: String,
+    val category: String
+)
