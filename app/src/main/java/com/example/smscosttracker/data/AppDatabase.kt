@@ -14,7 +14,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         CategoryCorrectionEntity::class,
         InstrumentEntity::class
     ],
-    version = 6,
+    version = 7,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -72,6 +72,20 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    "DELETE FROM raw_sms WHERE id NOT IN " +
+                        "(SELECT MIN(id) FROM raw_sms GROUP BY address, body, date, threadId)"
+                )
+                database.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS " +
+                        "index_raw_sms_address_body_date_threadId " +
+                        "ON raw_sms (address, body, date, threadId)"
+                )
+            }
+        }
+
         fun get(context: Context): AppDatabase =
             instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
@@ -83,7 +97,8 @@ abstract class AppDatabase : RoomDatabase() {
                     MIGRATION_2_3,
                     MIGRATION_3_4,
                     MIGRATION_4_5,
-                    MIGRATION_5_6
+                    MIGRATION_5_6,
+                    MIGRATION_6_7
                 ).build().also { instance = it }
             }
     }

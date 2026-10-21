@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; width: 1400px; height: 1100px; }
+  body {
+    font-family: "Noto Sans", "Noto Sans Arabic", sans-serif;
+    background:
+      radial-gradient(900px 500px at 20% 10%, #ffffff 0%, rgba(255,255,255,0) 65%),
+      linear-gradient(135deg, #eceef2 0%, #e5e8ee 100%);
+    color: #18202a;
+    overflow: hidden;
+  }
+  .canvas {
+    width: 1400px; height: 1100px; display: flex; align-items: center;
+    gap: 74px; padding: 70px 64px 70px 84px;
+  }
+  .phone {
+    width: 470px; height: 960px; flex: 0 0 470px;
+    background: #101216; border-radius: 58px; padding: 11px;
+    box-shadow: 0 42px 80px rgba(16,22,30,.28), 0 10px 24px rgba(16,22,30,.16);
+    position: relative;
+  }
+  .screen {
+    width: 448px; height: 938px; border-radius: 47px; overflow: hidden;
+    background: var(--bg); color: var(--ink); position: relative;
+    display: flex; flex-direction: column;
+  }
+  .status {
+    height: 38px; flex: 0 0 38px; display: flex; align-items: center;
+    justify-content: space-between; padding: 0 26px; font-size: 12px; font-weight: 700;
+    color: var(--ink);
+  }
+  .status-icons { display: flex; align-items: center; gap: 5px; }
+  .camera {
+    position: absolute; top: 13px; left: 50%; transform: translateX(-50%);
+    width: 10px; height: 10px; border-radius: 50%; background: #050608;
+    box-shadow: 0 0 0 2px rgba(0,0,0,.08);
+  }
+  .content { padding: 0 20px; display: flex; flex-direction: column; gap: 12px; }
+  .topbar { display: flex; align-items: center; justify-content: space-between; height: 54px; }
+  .topbar h1 { margin: 0; font-size: 26px; line-height: 1.05; letter-spacing: -.4px; font-weight: 700; }
+  .topbar .sub { margin-top: 4px; font-size: 12px; color: var(--muted); }
+  .avatar {
+    width: 38px; height: 38px; border-radius: 50%; background: var(--primary);
+    color: var(--on-primary); display: grid; place-items: center; font-size: 15px; font-weight: 700;
+  }
+  .chips { display: flex; gap: 8px; align-items: center; }
+  .chip {
+    padding: 6px 12px; border-radius: 999px; font-size: 11px; font-weight: 700;
+    border: 1px solid var(--outline); color: var(--muted); background: var(--surface);
+  }
+  .chip.active { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
+  .chip .dot { display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: currentColor; margin-right: 6px; opacity: .7; vertical-align: 1px; }
+  .spacer { flex: 1; }
+  .month {
+    background: var(--primary); color: var(--on-primary); border-radius: 22px; padding: 16px 18px 14px;
+    box-shadow: 0 10px 24px rgba(0,0,0,.10);
+  }
+  .month .label { font-size: 10px; letter-spacing: 1.3px; font-weight: 700; opacity: .78; text-transform: uppercase; }
+  .month .amount { font-size: 33px; font-weight: 700; letter-spacing: -.7px; margin-top: 2px; }
+  .month .delta { font-size: 11px; opacity: .78; margin-top: 3px; }
+  .month .split {
+    display: flex; gap: 0; margin-top: 13px; padding-top: 11px;
+    border-top: 1px solid rgba(255,255,255,.22);
+  }
+  .month .split > div { flex: 1; }
+  .month .split > div + div { border-left: 1px solid rgba(255,255,255,.22); padding-left: 14px; }
+  .month .split .k { font-size: 10px; opacity: .72; display: flex; align-items: center; gap: 5px; }
+  .month .split .v { font-size: 14px; font-weight: 700; margin-top: 2px; }
+  .banner {
+    display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+    border-radius: 14px; background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+    border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--outline));
+  }
+  .banner .icon {
+    width: 26px; height: 26px; flex: 0 0 26px; border-radius: 9px; display: grid; place-items: center;
+    background: var(--accent); color: #fff;
+  }
+  .banner .t { font-size: 11px; font-weight: 700; line-height: 1.25; }
+  .banner .s { font-size: 10px; color: var(--muted); margin-top: 1px; }
+  .banner .chev { margin-left: auto; color: var(--muted); }
+  .card {
+    background: var(--surface); border: 1px solid var(--outline); border-radius: 18px;
+    padding: 14px 15px;
+  }
+  .card-head { display: flex; align-items: baseline; justify-content: space-between; }
+  .card-head .title { font-size: 14px; font-weight: 700; }
+  .card-head .meta { font-size: 10px; color: var(--muted); }
+  .cats { display: flex; align-items: center; gap: 16px; margin-top: 10px; }
+  .donut {
+    width: 118px; height: 118px; border-radius: 50%; flex: 0 0 118px; position: relative;
+    background: conic-gradient(var(--c1) 0 32%, var(--c2) 32% 56%, var(--c3) 56% 74%, var(--c4) 74% 100%);
+  }
+  .donut::after {
+    content: ""; position: absolute; inset: 24px; border-radius: 50%; background: var(--surface);
+  }
+  .donut .center {
+    position: absolute; inset: 0; display: grid; place-content: center; text-align: center; z-index: 1;
+  }
+  .donut .center b { font-size: 20px; line-height: 1; letter-spacing: -.5px; }
+  .donut .center span { font-size: 9px; color: var(--muted); margin-top: 3px; letter-spacing: .5px; }
+  .legend { flex: 1; display: flex; flex-direction: column; gap: 7px; }
+  .legend .row { display: flex; align-items: center; gap: 7px; font-size: 10.5px; }
+  .legend .dot { width: 8px; height: 8px; border-radius: 3px; flex: 0 0 8px; }
+  .legend .pct { margin-left: auto; color: var(--muted); font-weight: 700; }
+  .recent-head { display: flex; align-items: baseline; justify-content: space-between; margin-top: 1px; }
+  .recent-head .title { font-size: 14px; font-weight: 700; }
+  .recent-head .link { font-size: 10px; color: var(--primary); font-weight: 700; }
+  .txns { background: var(--surface); border: 1px solid var(--outline); border-radius: 18px; overflow: hidden; }
+  .txn { display: flex; align-items: center; gap: 10px; padding: 10px 12px; }
+  .txn + .txn { border-top: 1px solid var(--outline); }
+  .txn .badge {
+    width: 32px; height: 32px; border-radius: 11px; display: grid; place-items: center;
+    flex: 0 0 32px; font-size: 13px; font-weight: 700;
+  }
+  .txn .merchant { font-size: 12px; font-weight: 700; }
+  .txn .detail { font-size: 9.5px; color: var(--muted); margin-top: 2px; display: flex; align-items: center; gap: 4px; }
+  .txn .amt { margin-left: auto; text-align: right; font-size: 12px; font-weight: 700; white-space: nowrap; }
+  .txn .amt span { display: block; font-size: 8.5px; color: var(--muted); font-weight: 500; margin-top: 1px; }
+  .nav {
+    margin-top: auto; height: 72px; background: var(--surface); border-top: 1px solid var(--outline);
+    display: flex; align-items: flex-start; justify-content: space-around; padding: 9px 10px 0;
+    position: relative;
+  }
+  .nav .item { width: 64px; display: flex; flex-direction: column; align-items: center; gap: 3px; color: var(--muted); font-size: 9px; font-weight: 700; }
+  .nav .item.active { color: var(--primary); }
+  .nav .item .ico { width: 24px; height: 24px; display: grid; place-items: center; border-radius: 8px; }
+  .nav .item.active .ico { background: color-mix(in srgb, var(--primary) 13%, transparent); }
+  .homebar { position: absolute; bottom: 6px; left: 50%; transform: translateX(-50%); width: 120px; height: 4px; border-radius: 99px; background: var(--ink); opacity: .55; }
+  .panel { width: 690px; flex: 0 0 690px; }
+  .kicker { font-size: 11px; letter-spacing: 1.8px; text-transform: uppercase; color: #7b8492; font-weight: 700; }
+  .title-row { display: flex; align-items: center; gap: 16px; margin-top: 6px; }
+  .panel h2 { font-size: 58px; line-height: 1; margin: 0; letter-spacing: -1.8px; color: #121a24; }
+  .pill {
+    font-size: 13px; font-weight: 700; padding: 8px 14px; border-radius: 999px;
+    background: #e3e7ee; color: #404a58; white-space: nowrap;
+  }
+  .pill.rec { background: #0E6B5C; color: #fff; }
+  .desc { font-size: 18px; line-height: 1.45; color: #4c5663; margin: 18px 0 0; max-width: 620px; }
+  .why { display: flex; gap: 8px; margin-top: 18px; flex-wrap: wrap; }
+  .why span { font-size: 12px; font-weight: 600; color: #46505d; background: #fff; border: 1px solid #d8dde5; padding: 7px 11px; border-radius: 999px; }
+  .group { margin-top: 28px; }
+  .group .ghead { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 10px; }
+  .group .ghead b { font-size: 12px; letter-spacing: 1.4px; text-transform: uppercase; color: #7b8492; }
+  .group .ghead span { font-size: 11px; color: #8a93a0; }
+  .swatches { display: grid; grid-template-columns: repeat(8, 1fr); gap: 9px; }
+  .sw { min-width: 0; }
+  .sw .chipcolor { height: 52px; border-radius: 11px; border: 1px solid rgba(20,26,34,.10); }
+  .sw .nm { font-size: 9.5px; color: #6d7683; margin-top: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sw .hx { font-size: 9px; color: #9aa2ae; font-family: "DejaVu Sans Mono", monospace; margin-top: 1px; }
+  .chartbar { display: flex; height: 34px; border-radius: 11px; overflow: hidden; border: 1px solid rgba(20,26,34,.08); }
+  .chartbar div { flex: 1; }
+  .note { margin-top: 26px; display: flex; align-items: center; gap: 10px; font-size: 12px; color: #6b7582; }
+  .note .line { width: 34px; height: 1px; background: #c7cdd6; }
+</style>
+</head>
+<body>
+  <div class="canvas">
+    <div class="phone">
+      <div class="camera"></div>
+      <div class="screen" style="
+        --bg: #F7F8FC; --surface: #FFFFFF; --surface-alt: #EEF1F9;
+        --outline: #E4E7F0; --ink: #121729; --muted: #667085;
+        --primary: #3355E8; --on-primary: #FFFFFF; --accent: #FF7A59;
+        --success: #00A88F; --danger: #D92D20;
+        --c1: #3355E8; --c2: #00A88F; --c3: #FF7A59; --c4: #9B6BFF;
+      ">
+        <div class="status">
+          <span>9:41</span>
+          <div class="status-icons">
+            <svg width="15" height="11" viewBox="0 0 15 11" fill="none"><rect x="0" y="7" width="3" height="4" rx="1" fill="currentColor"/><rect x="4" y="5" width="3" height="6" rx="1" fill="currentColor"/><rect x="8" y="2.5" width="3" height="8.5" rx="1" fill="currentColor"/><rect x="12" y="0" width="3" height="11" rx="1" fill="currentColor"/></svg>
+            <svg width="15" height="11" viewBox="0 0 15 11" fill="none"><path d="M1 4.2C4.8.9 10.2.9 14 4.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M3.4 6.8c2.5-2.1 5.7-2.1 8.2 0" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="7.5" cy="9.5" r="1.2" fill="currentColor"/></svg>
+            <svg width="20" height="10" viewBox="0 0 20 10" fill="none"><rect x=".5" y=".5" width="16" height="9" rx="2.5" stroke="currentColor"/><rect x="2" y="2" width="12" height="6" rx="1.5" fill="currentColor"/><path d="M18 3.3v3.4c1.2-.3 1.6-.9 1.6-1.7S19.2 3.6 18 3.3Z" fill="currentColor"/></svg>
+          </div>
+        </div>
+        <div class="content">
+          <div class="topbar">
+            <div><h1>Home</h1><div class="sub">October 2026</div></div>
+            <div class="avatar">A</div>
+          </div>
+          <div class="chips">
+            <div class="chip active"><span class="dot"></span>SAR</div>
+            <div class="chip"><span class="dot"></span>EGP</div>
+            <div class="spacer"></div>
+            <div class="chip">All accounts</div>
+          </div>
+          <div class="month">
+            <div class="label">Spent in October</div>
+            <div class="amount">SAR 4,820.00</div>
+            <div class="delta">▲ 12% vs September</div>
+            <div class="split">
+              <div><div class="k"><svg width="11" height="9" viewBox="0 0 12 10" fill="none"><rect x=".5" y="1" width="11" height="8" rx="1.6" stroke="currentColor" stroke-width="1.2"/><path d="M.5 3.4h11" stroke="currentColor" stroke-width="1.2"/></svg>Cards</div><div class="v">SAR 3,140</div></div>
+              <div><div class="k"><svg width="11" height="10" viewBox="0 0 12 10" fill="none"><path d="M1 3.5 6 1l5 2.5v1H1v-1Z" stroke="currentColor" stroke-width="1.1"/><path d="M2 5v3M5 5v3M8 5v3M10 5v3M1 8.5h10" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>Accounts</div><div class="v">SAR 1,680</div></div>
+            </div>
+          </div>
+          <div class="banner">
+            <div class="icon"><svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M7 1.5 13 12H1L7 1.5Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M7 5v3.2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><circle cx="7" cy="10.2" r=".85" fill="currentColor"/></svg></div>
+            <div><div class="t">12 card/account values need review</div><div class="s">Confirm which numbers are cards vs accounts</div></div>
+            <div class="chev"><svg width="7" height="12" viewBox="0 0 7 12" fill="none"><path d="m1 1 5 5-5 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          </div>
+          <div class="card">
+            <div class="card-head"><div class="title">Top categories</div><div class="meta">October</div></div>
+            <div class="cats">
+              <div class="donut"><div class="center"><b>4.8k</b><span>SAR</span></div></div>
+              <div class="legend">
+                <div class="row"><span class="dot" style="background:#3355E8"></span><span>Groceries</span><span class="pct">32%</span></div>
+                <div class="row"><span class="dot" style="background:#00A88F"></span><span>Dining</span><span class="pct">24%</span></div>
+                <div class="row"><span class="dot" style="background:#FF7A59"></span><span>Transport</span><span class="pct">18%</span></div>
+                <div class="row"><span class="dot" style="background:#9B6BFF"></span><span>Other</span><span class="pct">26%</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="recent-head"><div class="title">Recent</div><div class="link">See all</div></div>
+          <div class="txns">
+            <div class="txn">
+              <div class="badge" style="background:#3355E822;color:#3355E8">A</div>
+              <div><div class="merchant">Amazon Now</div><div class="detail"><svg width="10" height="8" viewBox="0 0 12 10" fill="none"><rect x=".5" y="1" width="11" height="8" rx="1.6" stroke="currentColor" stroke-width="1.2"/><path d="M.5 3.4h11" stroke="currentColor" stroke-width="1.2"/></svg>Shopping · Card 1214</div></div>
+              <div class="amt">−SAR 189.00<span>Today</span></div>
+            </div>
+            <div class="txn">
+              <div class="badge" style="background:#00A88F22;color:#00A88F">T</div>
+              <div><div class="merchant">Tamimi Markets</div><div class="detail"><svg width="10" height="9" viewBox="0 0 12 10" fill="none"><path d="M1 3.5 6 1l5 2.5v1H1v-1Z" stroke="currentColor" stroke-width="1.1"/><path d="M2 5v3M5 5v3M8 5v3M10 5v3M1 8.5h10" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>Groceries · Account 001</div></div>
+              <div class="amt">−SAR 236.50<span>Yesterday</span></div>
+            </div>
+            <div class="txn">
+              <div class="badge" style="background:#FF7A5922;color:#FF7A59">S</div>
+              <div><div class="merchant">STC</div><div class="detail"><svg width="10" height="8" viewBox="0 0 12 10" fill="none"><rect x=".5" y="1" width="11" height="8" rx="1.6" stroke="currentColor" stroke-width="1.2"/><path d="M.5 3.4h11" stroke="currentColor" stroke-width="1.2"/></svg>Telecom · Card 1214</div></div>
+              <div class="amt">−SAR 120.00<span>Oct 18</span></div>
+            </div>
+          </div>
+          <div class="spacer"></div>
+        </div>
+        <div class="nav">
+          <div class="item active"><div class="ico"><svg width="18" height="18" viewBox="0 0 20 20" fill="none"><path d="M3 8.6 10 3l7 5.6V17H3V8.6Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M8 17v-5h4v5" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></div>Home</div>
+          <div class="item"><div class="ico"><svg width="18" height="18" viewBox="0 0 20 20" fill="none"><path d="M3 5h14M3 10h14M3 15h9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></div>Activity</div>
+          <div class="item"><div class="ico"><svg width="18" height="18" viewBox="0 0 20 20" fill="none"><path d="M4 16V9M10 16V4M16 16v-4" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg></div>Insights</div>
+          <div class="item"><div class="ico"><svg width="18" height="18" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="2.6" stroke="currentColor" stroke-width="1.7"/><path d="M10 2.6v2M10 15.4v2M2.6 10h2M15.4 10h2M4.8 4.8l1.4 1.4M13.8 13.8l1.4 1.4M15.2 4.8l-1.4 1.4M6.2 13.8l-1.4 1.4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></div>Settings</div>
+          <div class="homebar"></div>
+        </div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="kicker">Palette option</div>
+      <div class="title-row"><h2>Pulse</h2><div class="pill ">Consumer fintech</div></div>
+      <p class="desc">Bright and energetic. Blue trust with teal and coral highlights.</p>
+      <div class="why"><span>Higher energy</span><span>Strong selected states</span><span>More consumer app than bank</span></div>
+      <div class="group">
+        <div class="ghead"><b>Light tokens</b><span>sample screen uses this mode</span></div>
+        <div class="swatches"><div class="sw"><div class="chipcolor" style="background:#F7F8FC"></div><div class="nm">Background</div><div class="hx">#F7F8FC</div></div><div class="sw"><div class="chipcolor" style="background:#FFFFFF"></div><div class="nm">Surface</div><div class="hx">#FFFFFF</div></div><div class="sw"><div class="chipcolor" style="background:#3355E8"></div><div class="nm">Primary</div><div class="hx">#3355E8</div></div><div class="sw"><div class="chipcolor" style="background:#00A88F"></div><div class="nm">Secondary</div><div class="hx">#00A88F</div></div><div class="sw"><div class="chipcolor" style="background:#121729"></div><div class="nm">Ink</div><div class="hx">#121729</div></div><div class="sw"><div class="chipcolor" style="background:#667085"></div><div class="nm">Muted</div><div class="hx">#667085</div></div><div class="sw"><div class="chipcolor" style="background:#E4E7F0"></div><div class="nm">Outline</div><div class="hx">#E4E7F0</div></div><div class="sw"><div class="chipcolor" style="background:#FF7A59"></div><div class="nm">Accent</div><div class="hx">#FF7A59</div></div></div>
+      </div>
+      <div class="group">
+        <div class="ghead"><b>Dark tokens</b><span>ready for system dark mode</span></div>
+        <div class="swatches"><div class="sw"><div class="chipcolor" style="background:#0B1020"></div><div class="nm">Background</div><div class="hx">#0B1020</div></div><div class="sw"><div class="chipcolor" style="background:#141A2E"></div><div class="nm">Surface</div><div class="hx">#141A2E</div></div><div class="sw"><div class="chipcolor" style="background:#7C93FF"></div><div class="nm">Primary</div><div class="hx">#7C93FF</div></div><div class="sw"><div class="chipcolor" style="background:#3DD6BE"></div><div class="nm">Secondary</div><div class="hx">#3DD6BE</div></div><div class="sw"><div class="chipcolor" style="background:#EDF0FA"></div><div class="nm">Ink</div><div class="hx">#EDF0FA</div></div><div class="sw"><div class="chipcolor" style="background:#9AA4BF"></div><div class="nm">Muted</div><div class="hx">#9AA4BF</div></div><div class="sw"><div class="chipcolor" style="background:#26304A"></div><div class="nm">Outline</div><div class="hx">#26304A</div></div><div class="sw"><div class="chipcolor" style="background:#FF9C82"></div><div class="nm">Accent</div><div class="hx">#FF9C82</div></div></div>
+      </div>
+      <div class="group">
+        <div class="ghead"><b>Chart sequence</b><span>categorical, currency-safe</span></div>
+        <div class="chartbar"><div style="background:#3355E8"></div><div style="background:#00A88F"></div><div style="background:#FF7A59"></div><div style="background:#9B6BFF"></div><div style="background:#F5B700"></div><div style="background:#26A6D1"></div><div style="background:#E05C8A"></div><div style="background:#7A8FA6"></div></div>
+      </div>
+      <div class="note"><span class="line"></span>Sample screen: proposed Home tab with cards vs accounts, category insight, and recent activity.</div>
+    </div>
+  </div>
+</body>
+</html>

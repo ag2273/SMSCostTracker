@@ -1,9 +1,13 @@
 package com.example.smscosttracker.data
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
-@Entity(tableName = "raw_sms")
+@Entity(
+    tableName = "raw_sms",
+    indices = [Index(value = ["address", "body", "date", "threadId"], unique = true)]
+)
 data class RawSmsEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val address: String,

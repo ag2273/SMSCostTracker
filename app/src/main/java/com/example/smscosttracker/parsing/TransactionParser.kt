@@ -11,6 +11,12 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
+sealed interface ParseOutcome {
+    data class Parsed(val transaction: ParsedTransaction) : ParseOutcome
+    data class Skipped(val reason: String) : ParseOutcome
+    data class Unparsed(val reason: String) : ParseOutcome
+}
+
 object TransactionParser {
     private const val UNKNOWN_MERCHANT = "Unknown"
 
@@ -100,20 +106,38 @@ object TransactionParser {
         message: RawSms,
         defaultCurrency: String = "EGP",
         instruments: Map<String, TransactionChannel> = emptyMap()
-    ): ParsedTransaction? {
+    ): ParsedTransaction? = (analyze(message, defaultCurrency, instruments) as? ParseOutcome.Parsed)
+        ?.transaction
+
+    fun analyze(
+        message: RawSms,
+        defaultCurrency: String = "EGP",
+        instruments: Map<String, TransactionChannel> = emptyMap()
+    ): ParseOutcome {
         val body = message.body
-        if (nonTransaction.containsMatchIn(body)) return null
-        if (creditOrRefund.containsMatchIn(body)) return null
-        val amount = extractAmount(body, defaultCurrency) ?: return null
+        if (nonTransaction.containsMatchIn(body)) {
+            return ParseOutcome.Skipped("Not a spending message")
+        }
+        if (creditOrRefund.containsMatchIn(body)) {
+            return ParseOutcome.Skipped("Credit, refund or income")
+        }
+        val amount = extractAmount(body, defaultCurrency)
+            ?: return if (transactionHint.containsMatchIn(body)) {
+                ParseOutcome.Unparsed("Amount not found")
+            } else {
+                ParseOutcome.Skipped("No amount or spending hint")
+            }
         val instrument = extractInstrument(body, message.address, instruments)
-        return ParsedTransaction(
-            amountMinor = amount.first,
-            currency = amount.second,
-            merchant = extractMerchant(body),
-            occurredAt = extractDate(body, message.date),
-            sourceAddress = message.address,
-            account = instrument.first,
-            channel = instrument.second
+        return ParseOutcome.Parsed(
+            ParsedTransaction(
+                amountMinor = amount.first,
+                currency = amount.second,
+                merchant = extractMerchant(body),
+                occurredAt = extractDate(body, message.date),
+                sourceAddress = message.address,
+                account = instrument.first,
+                channel = instrument.second
+            )
         )
     }
 
