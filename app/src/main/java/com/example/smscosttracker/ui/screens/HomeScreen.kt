@@ -19,13 +19,17 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.ChevronLeft
+import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.ReceiptLong
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -41,6 +45,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.smscosttracker.analysis.CategoryTotal
 import com.example.smscosttracker.analysis.DatePreset
+import com.example.smscosttracker.analysis.HomeFilterState
+import com.example.smscosttracker.analysis.HomePeriodUnit
 import com.example.smscosttracker.analysis.SpendingAnalysis
 import com.example.smscosttracker.analysis.TransactionFilterState
 import com.example.smscosttracker.analysis.TransactionFilters
@@ -68,7 +74,6 @@ import com.example.smscosttracker.ui.components.formatMoney
 import com.example.smscosttracker.ui.theme.Ledger
 import com.example.smscosttracker.ui.theme.LedgerChartColors
 import java.time.Instant
-import java.time.YearMonth
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -77,6 +82,8 @@ import java.util.Locale
 fun HomeScreen(
     repository: TransactionRepository,
     refreshKey: Int,
+    filter: HomeFilterState,
+    onFilterChange: (HomeFilterState) -> Unit,
     onOpenInstruments: () -> Unit,
     onOpenActivity: () -> Unit,
     onImport: () -> Unit
@@ -89,28 +96,40 @@ fun HomeScreen(
     val accounts = remember(state.transactions) {
         state.transactions.map { it.account }.filter { it.isNotBlank() }.distinct().sorted()
     }
-    var currency by remember(currencies) { mutableStateOf(currencies.firstOrNull() ?: "SAR") }
-    var account by remember { mutableStateOf<String?>(null) }
-    val month = YearMonth.now()
-    val monthLabel = month.format(DateTimeFormatter.ofPattern("MMMM yyyy", Locale.ENGLISH))
+    val currency = filter.currency?.takeIf { it in currencies }
+        ?: currencies.firstOrNull()
+        ?: "SAR"
 
-    val filter = TransactionFilterState(
-        preset = DatePreset.THIS_MONTH,
+    LaunchedEffect(currencies) {
+        if (!filter.currencyInitialized && currencies.isNotEmpty()) {
+            onFilterChange(
+                filter.copy(
+                    currency = filter.currency?.takeIf { it in currencies } ?: currencies.first(),
+                    currencyInitialized = true
+                )
+            )
+        }
+    }
+
+    val rangeFilter = TransactionFilterState(
+        preset = DatePreset.CUSTOM,
         currency = currency,
-        account = account
+        account = filter.account,
+        customStart = filter.periodStart,
+        customEnd = filter.periodEndExclusive.minusDays(1)
     )
-    val monthTransactions = remember(state.transactions, filter) {
-        TransactionFilters.apply(state.transactions, filter)
+    val periodTransactions = remember(state.transactions, rangeFilter) {
+        TransactionFilters.apply(state.transactions, rangeFilter)
     }
-    val summary = remember(monthTransactions) {
-        SpendingAnalysis.summarize(monthTransactions, topMerchantCount = 4)
+    val summary = remember(periodTransactions) {
+        SpendingAnalysis.summarize(periodTransactions, topMerchantCount = 4)
     }
-    val cards = monthTransactions.filter { TransactionChannel.fromStorage(it.channel) == TransactionChannel.CARD }
+    val cards = periodTransactions.filter { TransactionChannel.fromStorage(it.channel) == TransactionChannel.CARD }
         .sumOf { it.amountMinor }
-    val bankAccounts = monthTransactions.filter { TransactionChannel.fromStorage(it.channel) == TransactionChannel.ACCOUNT }
+    val bankAccounts = periodTransactions.filter { TransactionChannel.fromStorage(it.channel) == TransactionChannel.ACCOUNT }
         .sumOf { it.amountMinor }
-    val recent = remember(monthTransactions) {
-        monthTransactions.sortedByDescending { it.occurredAt }.take(3)
+    val recent = remember(periodTransactions) {
+        periodTransactions.sortedByDescending { it.occurredAt }.take(3)
     }
     val categoryRows = remember(summary.byCategory) {
         val sorted = summary.byCategory.sortedByDescending { it.amountMinor }
@@ -138,7 +157,7 @@ fun HomeScreen(
             ) {
                 PageHeader(
                     title = "Home",
-                    subtitle = monthLabel,
+                    subtitle = filter.periodLabel(),
                     trailing = {
                         Surface(
                             modifier = Modifier.size(36.dp),
@@ -151,7 +170,12 @@ fun HomeScreen(
                         }
                     }
                 )
-                Spacer(Modifier.height(14.dp))
+                Spacer(Modifier.height(10.dp))
+                PeriodPicker(
+                    filter = filter,
+                    onFilterChange = onFilterChange
+                )
+                Spacer(Modifier.height(10.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
@@ -161,30 +185,35 @@ fun HomeScreen(
                         LedgerChip(
                             text = code,
                             selected = code == currency,
-                            onClick = { currency = code }
+                            onClick = {
+                                onFilterChange(filter.copy(currency = code, currencyInitialized = true))
+                            }
                         )
                     }
                     Spacer(Modifier.weight(1f))
                     DropdownChip(
-                        label = account ?: "All accounts",
+                        label = filter.account ?: "All accounts",
                         options = listOf("All accounts") + accounts,
                         onSelect = { selected ->
-                            account = selected.takeUnless { it == "All accounts" }
+                            onFilterChange(
+                                filter.copy(account = selected.takeUnless { it == "All accounts" })
+                            )
                         }
                     )
                 }
                 Spacer(Modifier.height(14.dp))
                 SpendHero(
+                    label = filter.spendLabel(),
                     totalMinor = summary.totalMinor,
                     currency = currency,
-                    transactionCount = monthTransactions.size,
+                    transactionCount = periodTransactions.size,
                     cardsMinor = cards,
                     accountsMinor = bankAccounts
                 )
                 if (pending > 0) {
                     ReviewBanner(
                         title = "$pending card/account values need review",
-                        body = "Confirm them to improve this month's totals.",
+                        body = "Confirm them to improve this period's totals.",
                         onClick = onOpenInstruments,
                         modifier = Modifier.padding(top = 12.dp)
                     )
@@ -195,7 +224,7 @@ fun HomeScreen(
                         SectionRow(title = "Top categories", action = "See all", onAction = onOpenActivity)
                         if (categoryRows.isEmpty()) {
                             Text(
-                                "No spending yet this month.",
+                                "No spending in this period.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = Ledger.Muted,
                                 modifier = Modifier.padding(top = 12.dp)
@@ -233,7 +262,7 @@ fun HomeScreen(
                     EmptyState(
                         icon = Icons.Outlined.ReceiptLong,
                         title = "No transactions yet",
-                        body = "Import your bank SMS to see this month's spending."
+                        body = "Import your bank SMS to see spending for this period."
                     )
                     PrimaryButton("Import SMS", onImport)
                 } else {
@@ -255,7 +284,55 @@ fun HomeScreen(
 }
 
 @Composable
+private fun PeriodPicker(
+    filter: HomeFilterState,
+    onFilterChange: (HomeFilterState) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(7.dp)
+    ) {
+        LedgerChip(
+            text = "Month",
+            selected = filter.unit == HomePeriodUnit.MONTH,
+            onClick = { onFilterChange(filter.copy(unit = HomePeriodUnit.MONTH)) }
+        )
+        LedgerChip(
+            text = "Quarter",
+            selected = filter.unit == HomePeriodUnit.QUARTER,
+            onClick = { onFilterChange(filter.copy(unit = HomePeriodUnit.QUARTER)) }
+        )
+        Spacer(Modifier.weight(1f))
+        IconButton(
+            onClick = { onFilterChange(filter.shiftPeriod(-1)) },
+            modifier = Modifier.size(32.dp)
+        ) {
+            Icon(
+                Icons.Outlined.ChevronLeft,
+                contentDescription = "Previous period",
+                tint = Ledger.Ink,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+        IconButton(
+            onClick = { onFilterChange(filter.shiftPeriod(1)) },
+            enabled = filter.canMoveForward(),
+            modifier = Modifier.size(32.dp)
+        ) {
+            Icon(
+                Icons.Outlined.ChevronRight,
+                contentDescription = "Next period",
+                tint = if (filter.canMoveForward()) Ledger.Ink else Ledger.Outline,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+    }
+}
+
+@Composable
 private fun SpendHero(
+    label: String,
     totalMinor: Long,
     currency: String,
     transactionCount: Int,
@@ -269,7 +346,7 @@ private fun SpendHero(
     ) {
         Column(modifier = Modifier.padding(horizontal = 18.dp, vertical = 16.dp)) {
             Text(
-                "SPENT THIS MONTH",
+                label,
                 style = MaterialTheme.typography.labelSmall,
                 color = Ledger.OnPrimary.copy(alpha = 0.75f)
             )

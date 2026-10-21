@@ -32,6 +32,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.example.smscosttracker.analysis.ActivityFilterState
 import com.example.smscosttracker.analysis.DatePreset
 import com.example.smscosttracker.analysis.TransactionFilterState
 import com.example.smscosttracker.analysis.TransactionFilters
@@ -69,6 +70,8 @@ import kotlin.concurrent.thread
 fun ActivityScreen(
     repository: TransactionRepository,
     refreshKey: Int,
+    filters: ActivityFilterState,
+    onFiltersChange: (ActivityFilterState) -> Unit,
     onDataChanged: () -> Unit
 ) {
     val state = rememberTransactions(repository, refreshKey)
@@ -78,17 +81,26 @@ fun ActivityScreen(
     val accounts = remember(state.transactions) {
         state.transactions.map { it.account }.filter { it.isNotBlank() }.distinct().sorted()
     }
-    var filter by remember { mutableStateOf(TransactionFilterState(preset = DatePreset.THIS_MONTH)) }
+    val filter = filters.filter
     var pendingKeys by remember { mutableStateOf<Set<String>>(emptySet()) }
-    var currencyInitialized by remember { mutableStateOf(false) }
     var showFilters by remember { mutableStateOf(false) }
     var detail by remember { mutableStateOf<TransactionEntity?>(null) }
     var categoryFor by remember { mutableStateOf<TransactionEntity?>(null) }
 
-    LaunchedEffect(currencies) {
-        if (!currencyInitialized && currencies.isNotEmpty()) {
-            filter = filter.copy(currency = currencies.first())
-            currencyInitialized = true
+    fun updateFilter(next: TransactionFilterState) {
+        onFiltersChange(filters.copy(filter = next, currencyInitialized = true))
+    }
+
+    LaunchedEffect(currencies, filters.currencyInitialized) {
+        if (!filters.currencyInitialized && currencies.isNotEmpty()) {
+            onFiltersChange(
+                filters.copy(
+                    filter = filter.copy(
+                        currency = filter.currency?.takeIf { it in currencies } ?: currencies.first()
+                    ),
+                    currencyInitialized = true
+                )
+            )
         }
     }
     LaunchedEffect(refreshKey) {
@@ -117,7 +129,7 @@ fun ActivityScreen(
             Spacer(Modifier.height(14.dp))
             LedgerTextField(
                 value = filter.merchantQuery,
-                onValueChange = { filter = filter.copy(merchantQuery = it) },
+                onValueChange = { updateFilter(filter.copy(merchantQuery = it)) },
                 placeholder = "Search merchant or amount",
                 leadingIcon = Icons.Outlined.Search
             )
@@ -142,8 +154,10 @@ fun ActivityScreen(
                     label = filter.currency ?: "All currencies",
                     options = listOf("All currencies") + currencies,
                     onSelect = { selected ->
-                        filter = filter.copy(
-                            currency = selected.takeUnless { it == "All currencies" }
+                        updateFilter(
+                            filter.copy(
+                                currency = selected.takeUnless { it == "All currencies" }
+                            )
                         )
                     }
                 )
@@ -153,9 +167,11 @@ fun ActivityScreen(
                         style = MaterialTheme.typography.labelMedium,
                         color = Ledger.Primary,
                         modifier = Modifier.clickable {
-                            filter = TransactionFilterState(
-                                preset = DatePreset.THIS_MONTH,
-                                currency = currencies.firstOrNull()
+                            updateFilter(
+                                TransactionFilterState(
+                                    preset = DatePreset.THIS_MONTH,
+                                    currency = currencies.firstOrNull()
+                                )
                             )
                         }
                     )
@@ -202,7 +218,7 @@ fun ActivityScreen(
             allTransactions = state.transactions,
             onDismiss = { showFilters = false },
             onApply = {
-                filter = it
+                updateFilter(it)
                 showFilters = false
             }
         )

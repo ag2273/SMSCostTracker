@@ -17,6 +17,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import com.example.smscosttracker.analysis.ActivityFilterState
+import com.example.smscosttracker.analysis.HomeFilterState
 import com.example.smscosttracker.data.AppDatabase
 import com.example.smscosttracker.data.OnboardingPreferences
 import com.example.smscosttracker.data.TransactionImporter
@@ -114,6 +116,8 @@ private fun MainShell(
 ) {
     var tab by remember { mutableStateOf(0) }
     var settingsRoute by remember { mutableStateOf(SettingsRoute.OVERVIEW) }
+    var homeFilter by remember { mutableStateOf(HomeFilterState()) }
+    var activityFilters by remember { mutableStateOf(ActivityFilterState()) }
 
     BackHandler(enabled = tab == 3 && settingsRoute != SettingsRoute.OVERVIEW) {
         settingsRoute = SettingsRoute.OVERVIEW
@@ -137,6 +141,8 @@ private fun MainShell(
                 0 -> HomeScreen(
                     repository = repository,
                     refreshKey = refreshKey,
+                    filter = homeFilter,
+                    onFilterChange = { homeFilter = it },
                     onOpenInstruments = {
                         tab = 3
                         settingsRoute = SettingsRoute.INSTRUMENTS
@@ -150,6 +156,8 @@ private fun MainShell(
                 1 -> ActivityScreen(
                     repository = repository,
                     refreshKey = refreshKey,
+                    filters = activityFilters,
+                    onFiltersChange = { activityFilters = it },
                     onDataChanged = onDataChanged
                 )
                 2 -> InsightsScreen(repository = repository, refreshKey = refreshKey)

@@ -210,7 +210,7 @@ fun TransactionDetailSheet(
 
     LaunchedEffect(transaction.id) {
         thread {
-            val loadedMessages = repository.rawMessagesFor(transaction)
+            val loadedMessages = repository.sourceMessagesFor(transaction)
             val loadedCandidates = repository.candidateInstruments(transaction)
             Handler(Looper.getMainLooper()).post {
                 messages = loadedMessages
@@ -320,7 +320,7 @@ fun TransactionDetailSheet(
                         )
                     } else if (messages.isEmpty()) {
                         Text(
-                            "No stored SMS found for this sender and date.",
+                            "No matching source SMS found.",
                             style = MaterialTheme.typography.bodySmall,
                             color = Ledger.Muted
                         )

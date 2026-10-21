@@ -22,7 +22,37 @@ class TransactionRepository(private val database: AppDatabase) {
     fun hasImportedData(): Boolean =
         database.rawSmsDao().count() > 0 || database.transactionDao().count() > 0
 
-    fun rawMessagesFor(transaction: TransactionEntity): List<RawSmsEntity> {
+    fun sourceMessagesFor(transaction: TransactionEntity): List<RawSmsEntity> {
+        val instruments = configuredInstrumentMap()
+        val candidates = nearbyMessagesFor(transaction).mapNotNull { raw ->
+            val parsed = TransactionParser.parse(
+                RawSms(
+                    address = raw.address,
+                    body = raw.body,
+                    date = raw.date,
+                    threadId = raw.threadId
+                ),
+                instruments = instruments
+            ) ?: return@mapNotNull null
+            raw to parsed
+        }
+        val sameTransaction = candidates.filter { (_, parsed) ->
+            parsed.amountMinor == transaction.amountMinor &&
+                parsed.merchant == transaction.merchant &&
+                parsed.occurredAt == transaction.occurredAt &&
+                parsed.sourceAddress == transaction.sourceAddress
+        }
+        val sameAmountAndTime = candidates.filter { (_, parsed) ->
+            parsed.amountMinor == transaction.amountMinor &&
+                parsed.occurredAt == transaction.occurredAt &&
+                parsed.sourceAddress == transaction.sourceAddress
+        }
+        return (sameTransaction.ifEmpty { sameAmountAndTime })
+            .map { it.first }
+            .sortedBy { kotlin.math.abs(it.date - transaction.occurredAt) }
+    }
+
+    fun nearbyMessagesFor(transaction: TransactionEntity): List<RawSmsEntity> {
         val window = 45L * 24 * 60 * 60 * 1000
         return database.rawSmsDao().messagesFor(
             address = transaction.sourceAddress,
@@ -54,12 +84,7 @@ class TransactionRepository(private val database: AppDatabase) {
             .toSet()
 
     fun unparsedMessages(): List<UnparsedSms> {
-        val instruments = database.instrumentDao().getAll()
-            .filterNot { it.ignored }
-            .associate {
-                TransactionParser.instrumentKey(it.address, it.digits) to
-                    TransactionChannel.fromStorage(it.channel)
-            }
+        val instruments = configuredInstrumentMap()
         return database.rawSmsDao().getAll().mapNotNull { raw ->
             val outcome = TransactionParser.analyze(
                 RawSms(
@@ -126,7 +151,7 @@ class TransactionRepository(private val database: AppDatabase) {
     }
 
     fun candidateInstruments(transaction: TransactionEntity): List<InstrumentCandidate> {
-        val fromMessages = rawMessagesFor(transaction).flatMap {
+        val fromMessages = nearbyMessagesFor(transaction).flatMap {
             TransactionParser.candidates(it.body)
         }
         val currentDigits = transaction.account.substringAfterLast(' ')
@@ -168,4 +193,12 @@ class TransactionRepository(private val database: AppDatabase) {
             channel = candidate.channel.name
         )
     }
+
+    private fun configuredInstrumentMap(): Map<String, TransactionChannel> =
+        database.instrumentDao().getAll()
+            .filterNot { it.ignored }
+            .associate {
+                TransactionParser.instrumentKey(it.address, it.digits) to
+                    TransactionChannel.fromStorage(it.channel)
+            }
 }
