@@ -12,14 +12,19 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
@@ -42,11 +47,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import com.example.smscosttracker.analysis.CategoryTotal
 import com.example.smscosttracker.analysis.DatePreset
+import com.example.smscosttracker.analysis.MerchantTotal
+import com.example.smscosttracker.analysis.MonthlyTotal
+import com.example.smscosttracker.analysis.SpendingAnalysis
 import com.example.smscosttracker.analysis.TransactionFilterState
 import com.example.smscosttracker.analysis.TransactionFilters
 import com.example.smscosttracker.classification.Category
@@ -60,6 +70,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 import kotlin.concurrent.thread
 
 class MainActivity : ComponentActivity() {
@@ -75,27 +86,42 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+private enum class AppTab(val label: String) {
+    IMPORT("Import"),
+    TRANSACTIONS("Transactions"),
+    CHARTS("Charts")
+}
+
 @Composable
 private fun App() {
     val context = LocalContext.current
     val database = remember { AppDatabase.get(context) }
     val importer = remember { TransactionImporter(database) }
     val repository = remember { TransactionRepository(database) }
-    var tab by remember { mutableStateOf(0) }
+    var tab by remember { mutableStateOf(AppTab.IMPORT) }
     var refreshKey by remember { mutableStateOf(0) }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        TabRow(selectedTabIndex = tab) {
-            Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Import") })
-            Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("Transactions") })
+        TabRow(selectedTabIndex = tab.ordinal) {
+            AppTab.entries.forEach { entry ->
+                Tab(
+                    selected = tab == entry,
+                    onClick = { tab = entry },
+                    text = { Text(entry.label) }
+                )
+            }
         }
         when (tab) {
-            0 -> ImportScreen(
+            AppTab.IMPORT -> ImportScreen(
                 importer = importer,
                 repository = repository,
                 onImported = { refreshKey++ }
             )
-            else -> TransactionsScreen(repository = repository, refreshKey = refreshKey)
+            AppTab.TRANSACTIONS -> TransactionsScreen(
+                repository = repository,
+                refreshKey = refreshKey
+            )
+            AppTab.CHARTS -> ChartsScreen(repository = repository, refreshKey = refreshKey)
         }
     }
 }
@@ -235,13 +261,23 @@ private fun ThreadRow(thread: SmsThread, checked: Boolean, onToggle: () -> Unit)
     }
 }
 
-@Composable
-private fun TransactionsScreen(repository: TransactionRepository, refreshKey: Int) {
-    var transactions by remember { mutableStateOf<List<TransactionEntity>>(emptyList()) }
-    var filter by remember { mutableStateOf(TransactionFilterState()) }
-    var loading by remember { mutableStateOf(true) }
+private class TransactionListState(
+    val transactions: List<TransactionEntity>,
+    val loading: Boolean,
+    val reload: () -> Unit
+)
 
-    LaunchedEffect(refreshKey) {
+@Composable
+private fun rememberTransactions(
+    repository: TransactionRepository,
+    refreshKey: Int
+): TransactionListState {
+    var transactions by remember { mutableStateOf<List<TransactionEntity>>(emptyList()) }
+    var loading by remember { mutableStateOf(true) }
+    var version by remember { mutableStateOf(0) }
+
+    LaunchedEffect(refreshKey, version) {
+        loading = true
         thread {
             val loaded = repository.transactions()
             Handler(Looper.getMainLooper()).post {
@@ -251,11 +287,18 @@ private fun TransactionsScreen(repository: TransactionRepository, refreshKey: In
         }
     }
 
-    val filtered = TransactionFilters.apply(transactions, filter)
+    return TransactionListState(transactions, loading) { version++ }
+}
+
+@Composable
+private fun TransactionsScreen(repository: TransactionRepository, refreshKey: Int) {
+    var filter by remember { mutableStateOf(TransactionFilterState()) }
+    val state = rememberTransactions(repository, refreshKey)
+    val filtered = TransactionFilters.apply(state.transactions, filter)
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         FilterBar(filter = filter, onChange = { filter = it })
-        if (loading) {
+        if (state.loading) {
             CircularProgressIndicator(modifier = Modifier.padding(top = 12.dp))
         } else if (filtered.isEmpty()) {
             Text("No transactions match these filters.", modifier = Modifier.padding(top = 16.dp))
@@ -272,10 +315,7 @@ private fun TransactionsScreen(repository: TransactionRepository, refreshKey: In
                         onCategorySelected = { category ->
                             thread {
                                 repository.updateCategory(transaction, category)
-                                val loaded = repository.transactions()
-                                Handler(Looper.getMainLooper()).post {
-                                    transactions = loaded
-                                }
+                                Handler(Looper.getMainLooper()).post { state.reload() }
                             }
                         }
                     )
@@ -285,6 +325,171 @@ private fun TransactionsScreen(repository: TransactionRepository, refreshKey: In
         }
     }
 }
+
+@Composable
+private fun ChartsScreen(repository: TransactionRepository, refreshKey: Int) {
+    var filter by remember { mutableStateOf(TransactionFilterState()) }
+    val state = rememberTransactions(repository, refreshKey)
+    val filtered = TransactionFilters.apply(state.transactions, filter)
+    val summary = remember(state.transactions, filter) { SpendingAnalysis.summarize(filtered) }
+    val currency = summary.currency.ifBlank { "EGP" }
+
+    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+        FilterBar(filter = filter, onChange = { filter = it })
+        if (state.loading) {
+            CircularProgressIndicator(modifier = Modifier.padding(top = 12.dp))
+        } else if (filtered.isEmpty()) {
+            Text("No transactions match these filters.", modifier = Modifier.padding(top = 16.dp))
+        } else {
+            LazyColumn(
+                modifier = Modifier.weight(1f).padding(top = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(24.dp)
+            ) {
+                item {
+                    Text(
+                        "Total: ${formatAmount(summary.totalMinor, currency)}",
+                        style = MaterialTheme.typography.titleLarge
+                    )
+                }
+                item {
+                    SectionTitle("Spending by category")
+                    CategoryPieChart(summary.byCategory, currency)
+                }
+                item {
+                    SectionTitle("Monthly trend")
+                    MonthlyBarChart(summary.byMonth, currency)
+                }
+                item {
+                    SectionTitle("Top merchants")
+                    TopMerchants(summary.topMerchants, currency)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SectionTitle(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.titleMedium,
+        modifier = Modifier.padding(bottom = 8.dp)
+    )
+}
+
+@Composable
+private fun CategoryPieChart(totals: List<CategoryTotal>, currency: String) {
+    Column {
+        Canvas(modifier = Modifier.size(180.dp)) {
+            val total = totals.sumOf { it.amountMinor }.coerceAtLeast(1)
+            var start = -90f
+            totals.forEachIndexed { index, totalForCategory ->
+                val sweep = 360f * totalForCategory.amountMinor / total
+                drawArc(
+                    color = chartColors[index % chartColors.size],
+                    startAngle = start,
+                    sweepAngle = sweep,
+                    useCenter = true
+                )
+                start += sweep
+            }
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        totals.forEachIndexed { index, totalForCategory ->
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(12.dp)
+                        .background(chartColors[index % chartColors.size])
+                )
+                Text(
+                    totalForCategory.category.displayName,
+                    modifier = Modifier.weight(1f).padding(start = 8.dp)
+                )
+                Text(formatAmount(totalForCategory.amountMinor, currency))
+            }
+        }
+    }
+}
+
+@Composable
+private fun MonthlyBarChart(totals: List<MonthlyTotal>, currency: String) {
+    val max = totals.maxOfOrNull { it.amountMinor }?.coerceAtLeast(1) ?: 1
+    val formatter = remember { DateTimeFormatter.ofPattern("MMM") }
+    val yearFormatter = remember { DateTimeFormatter.ofPattern("MMM yy") }
+    Row(
+        modifier = Modifier.fillMaxWidth().height(160.dp),
+        verticalAlignment = Alignment.Bottom,
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        totals.forEach { total ->
+            Column(
+                modifier = Modifier.weight(1f),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Bottom
+            ) {
+                Text(
+                    formatAmount(total.amountMinor, currency),
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 1
+                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(0.6f)
+                        .height((110f * total.amountMinor / max).dp)
+                        .background(MaterialTheme.colorScheme.primary)
+                )
+                Text(
+                    if (total.month.monthValue == 1) {
+                        total.month.format(yearFormatter)
+                    } else {
+                        total.month.format(formatter)
+                    },
+                    style = MaterialTheme.typography.labelSmall
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun TopMerchants(merchants: List<MerchantTotal>, currency: String) {
+    Column {
+        merchants.forEach { merchant ->
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(merchant.merchant, modifier = Modifier.weight(1f))
+                Text(formatAmount(merchant.amountMinor, currency))
+            }
+        }
+    }
+}
+
+private fun formatAmount(amountMinor: Long, currency: String): String =
+    String.format(Locale.US, "%.2f %s", amountMinor / 100.0, currency)
+
+private val chartColors = listOf(
+    Color(0xFF1E88E5),
+    Color(0xFF43A047),
+    Color(0xFFF4511E),
+    Color(0xFF8E24AA),
+    Color(0xFFFDD835),
+    Color(0xFF00ACC1),
+    Color(0xFFD81B60),
+    Color(0xFF6D4C41),
+    Color(0xFF3949AB),
+    Color(0xFF7CB342),
+    Color(0xFFFFB300),
+    Color(0xFF00897B),
+    Color(0xFF5E35B1),
+    Color(0xFF546E7A),
+    Color(0xFFC62828)
+)
 
 @Composable
 private fun FilterBar(
@@ -380,7 +585,7 @@ private fun TransactionRow(
             )
         }
         Column(horizontalAlignment = Alignment.End) {
-            Text("%.2f %s".format(transaction.amountMinor / 100.0, transaction.currency))
+            Text(formatAmount(transaction.amountMinor, transaction.currency))
             Dropdown(
                 label = Category.fromStorage(transaction.category).displayName,
                 options = Category.entries.map { it.displayName },
