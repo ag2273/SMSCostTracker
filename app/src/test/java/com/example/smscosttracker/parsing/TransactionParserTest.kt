@@ -1,5 +1,6 @@
 package com.example.smscosttracker.parsing
 
+import com.example.smscosttracker.data.InstrumentCandidate
 import com.example.smscosttracker.data.RawSms
 import com.example.smscosttracker.data.TransactionChannel
 import org.junit.Assert.assertEquals
@@ -229,5 +230,33 @@ class TransactionParserTest {
 
         assertEquals("BANK 3060", parsed.account)
         assertEquals(TransactionChannel.ACCOUNT, parsed.channel)
+    }
+
+    @Test
+    fun `does not treat dates or times as instruments`() {
+        val candidates = TransactionParser.candidates(
+            "Payment on 2026-09-10 13:18:37 to 2026-09-11 from 12:18 " +
+                "Account activity only."
+        )
+
+        assertEquals(emptyList<InstrumentCandidate>(), candidates)
+    }
+
+    @Test
+    fun `ignores reference numbers in running text`() {
+        assertEquals(
+            emptyList<InstrumentCandidate>(),
+            TransactionParser.candidates("Transfer to 1507 offers, ref (1012), time 13:18")
+        )
+    }
+
+    @Test
+    fun `accepts a plain from line`() {
+        assertEquals(
+            listOf(InstrumentCandidate("3060", TransactionChannel.ACCOUNT)),
+            TransactionParser.candidates(
+                "Funds Transfer Accepted\nFrom 3060\nTo: BARQ SAFE\nAmount: SAR 10.00"
+            )
+        )
     }
 }

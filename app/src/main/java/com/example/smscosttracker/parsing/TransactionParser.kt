@@ -55,16 +55,36 @@ object TransactionParser {
     private val cardPatterns = listOf(
         Regex(
             "(?i)\\b(?:card|mada|visa|mastercard|google pay|apple pay)" +
-                "[^0-9\\n]{0,20}[*xX#]*([0-9]{2,6})"
+                "[^0-9\\n]{0,12}[*xX#]*([0-9]{3,6})(?![0-9:/-])"
         ),
         Regex("(?i)\\*{2,}[ \\t]*([0-9]{3,6})[^\\n]{0,12}\\b(?:mada|visa|mastercard)\\b"),
         Regex("(?i)\\b(?:by|via)\\s*:?\\s*\\*{2,}[ \\t]*([0-9]{3,6})")
     )
-    private val accountPattern = Regex(
-        "(?i)\\b(?:from|to|account|a/c|acct)[^0-9\\n]{0,20}[*xX#]*([0-9]{2,6})"
+    private val accountPatterns = listOf(
+        Regex(
+            "(?im)(?:^|\\n)\\s*(?:from|to)\\s*" +
+                "(?:no\\.?|number|ending|last)?\\s*[:#]\\s*" +
+                "[*xX#]*([0-9]{3,6})(?![0-9:/-])"
+        ),
+        Regex(
+            "(?i)\\b(?:account|a/c|acct)\\s*" +
+                "(?:no\\.?|number|ending|last)?\\s*[:#]\\s*" +
+                "[*xX#]*([0-9]{3,6})(?![0-9:/-])"
+        ),
+        Regex(
+            "(?i)\\b(?:from|to|account|a/c|acct)\\s*\\(?\\s*" +
+                "[*xX#]{1,}[ \\t]*([0-9]{3,6})(?![0-9:/-])"
+        ),
+        Regex(
+            "(?i)\\b(?:account|a/c|acct|from|to)\\s+" +
+                "(?:no\\.?|number|ending|last)\\s*[:#]?\\s*" +
+                "[*xX#]*([0-9]{3,6})(?![0-9:/-])"
+        ),
+        Regex(
+            "(?im)(?:^|\\n)\\s*(?:from|to)\\s+([0-9]{3,6})(?![0-9:/-])"
+        )
     )
     private val maskedPattern = Regex("(?i)\\*{2,}[ \\t]*([0-9]{3,6})")
-    private val parenthesisedPattern = Regex("\\(\\s*([0-9]{3,6})\\s*\\)")
     private val cardContext = Regex(
         "(?i)\\b(pos|purchase|online purchase|card|mada|visa|mastercard|" +
             "google pay|apple pay|used at)\\b"
@@ -99,9 +119,15 @@ object TransactionParser {
 
     fun candidates(body: String): List<InstrumentCandidate> {
         val found = LinkedHashMap<String, Pair<TransactionChannel, Int>>()
-        fun add(digits: String?, channel: TransactionChannel, priority: Int) {
+        fun add(
+            digits: String?,
+            channel: TransactionChannel,
+            priority: Int,
+            rejectYear: Boolean = false
+        ) {
             val value = digits?.trim()
-            if (value.isNullOrEmpty()) return
+            if (value.isNullOrEmpty() || value.length !in 3..6) return
+            if (rejectYear && value.length == 4 && value.toIntOrNull() in 1900..2100) return
             val existing = found[value]
             if (existing == null || priority > existing.second) {
                 found[value] = channel to priority
@@ -111,24 +137,23 @@ object TransactionParser {
         cardPatterns.forEach { pattern ->
             pattern.findAll(body).forEach { add(it.groupValues[1], TransactionChannel.CARD, 2) }
         }
-        accountPattern.findAll(body).forEach {
-            add(it.groupValues[1], TransactionChannel.ACCOUNT, 2)
+        accountPatterns.forEach { pattern ->
+            pattern.findAll(body).forEach {
+                add(it.groupValues[1], TransactionChannel.ACCOUNT, 2, rejectYear = true)
+            }
         }
-        val guessedCard = cardContext.containsMatchIn(body) &&
-            !accountContext.containsMatchIn(body)
-        maskedPattern.findAll(body).forEach {
-            add(
-                it.groupValues[1],
-                if (guessedCard) TransactionChannel.CARD else TransactionChannel.ACCOUNT,
-                1
-            )
-        }
-        parenthesisedPattern.findAll(body).forEach {
-            add(
-                it.groupValues[1],
-                if (guessedCard) TransactionChannel.CARD else TransactionChannel.ACCOUNT,
-                1
-            )
+        val hasCardContext = cardContext.containsMatchIn(body)
+        val hasAccountContext = accountContext.containsMatchIn(body)
+        val guessedCard = hasCardContext && !hasAccountContext
+        if (hasCardContext || hasAccountContext) {
+            maskedPattern.findAll(body).forEach {
+                add(
+                    it.groupValues[1],
+                    if (guessedCard) TransactionChannel.CARD else TransactionChannel.ACCOUNT,
+                    1,
+                    rejectYear = !guessedCard
+                )
+            }
         }
         return found.map { InstrumentCandidate(it.key, it.value.first) }
     }
