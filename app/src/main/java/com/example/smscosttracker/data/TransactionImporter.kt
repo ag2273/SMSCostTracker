@@ -73,7 +73,8 @@ class TransactionImporter(
                     occurredAt = candidate.occurredAt,
                     sourceAddress = candidate.sourceAddress,
                     category = classifier.classify(candidate.merchant).displayName,
-                    account = candidate.account
+                    account = candidate.account,
+                    channel = candidate.channel.name
                 )
             )
         }

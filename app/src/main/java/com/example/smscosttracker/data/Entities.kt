@@ -21,7 +21,8 @@ data class TransactionEntity(
     val occurredAt: Long,
     val sourceAddress: String,
     val category: String,
-    val account: String = ""
+    val account: String = "",
+    val channel: String = ""
 )
 
 @Entity(tableName = "category_corrections")

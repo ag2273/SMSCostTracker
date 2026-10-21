@@ -2,6 +2,7 @@ package com.example.smscosttracker.parsing
 
 import com.example.smscosttracker.data.ParsedTransaction
 import com.example.smscosttracker.data.RawSms
+import com.example.smscosttracker.data.TransactionChannel
 import java.math.BigDecimal
 import java.math.RoundingMode
 import java.time.Instant
@@ -50,11 +51,16 @@ object TransactionParser {
         Regex("\\b(\\d{1,2}/(\\d{1,2})/(\\d{4}))\\b") to DateTimeFormatter.ofPattern("d/M/yyyy"),
         Regex("\\b(\\d{1,2}-(\\d{1,2})-(\\d{4}))\\b") to DateTimeFormatter.ofPattern("d-M-yyyy")
     )
-    private val accountPatterns = listOf(
-        Regex("(?i)\\b(?:card|account|a/c|acct)[^0-9]{0,20}[*xX#]*([0-9]{2,6})"),
-        Regex("(?i)\\bfrom\\s*:?\\s*\\(?\\s*[*xX#]*([0-9]{2,6})\\s*\\)?"),
-        Regex("(?i)\\*{2,}\\s*([0-9]{3,6})"),
-        Regex("(?i)\\b(?:by|to)\\s*:?\\s*[*xX#]*([0-9]{2,6})")
+    private val cardPattern = Regex(
+        "(?i)\\b(?:card|mada|google pay|apple pay)[^0-9\\n]{0,20}[*xX#]*([0-9]{2,6})"
+    )
+    private val accountPattern = Regex(
+        "(?i)\\b(?:from|to|account|a/c|acct)[^0-9\\n]{0,20}[*xX#]*([0-9]{2,6})"
+    )
+    private val maskedPattern = Regex("(?i)\\*{2,}[ \\t]*([0-9]{3,6})")
+    private val parenthesisedPattern = Regex("\\(\\s*([0-9]{3,6})\\s*\\)")
+    private val cardContext = Regex(
+        "(?i)\\b(pos|purchase|online purchase|card|mada|google pay|apple pay|used at)\\b"
     )
 
     fun parse(message: RawSms, defaultCurrency: String = "EGP"): ParsedTransaction? {
@@ -62,22 +68,42 @@ object TransactionParser {
         if (nonTransaction.containsMatchIn(body)) return null
         if (creditOrRefund.containsMatchIn(body)) return null
         val amount = extractAmount(body, defaultCurrency) ?: return null
+        val instrument = extractInstrument(body, message.address)
         return ParsedTransaction(
             amountMinor = amount.first,
             currency = amount.second,
             merchant = extractMerchant(body),
             occurredAt = extractDate(body, message.date),
             sourceAddress = message.address,
-            account = extractAccount(body, message.address)
+            account = instrument.first,
+            channel = instrument.second
         )
     }
 
-    private fun extractAccount(body: String, sender: String): String {
-        for (pattern in accountPatterns) {
-            val digits = pattern.find(body)?.groupValues?.get(1)?.trim() ?: continue
-            if (digits.isNotEmpty()) return "$sender $digits"
+    private fun extractInstrument(
+        body: String,
+        sender: String
+    ): Pair<String, TransactionChannel> {
+        val cardDigits = cardPattern.find(body)?.groupValues?.get(1)?.trim()
+        if (!cardDigits.isNullOrEmpty()) {
+            return "$sender $cardDigits" to TransactionChannel.CARD
         }
-        return sender
+        val accountDigits = accountPattern.find(body)?.groupValues?.get(1)?.trim()
+        if (!accountDigits.isNullOrEmpty()) {
+            return "$sender $accountDigits" to TransactionChannel.ACCOUNT
+        }
+        val masked = maskedPattern.find(body)?.groupValues?.get(1)?.trim()
+        if (!masked.isNullOrEmpty()) {
+            val card = cardContext.containsMatchIn(body)
+            return "$sender $masked" to if (card) TransactionChannel.CARD else TransactionChannel.ACCOUNT
+        }
+        val parenthesised = parenthesisedPattern.find(body)?.groupValues?.get(1)?.trim()
+        if (!parenthesised.isNullOrEmpty()) {
+            val card = cardContext.containsMatchIn(body)
+            return "$sender $parenthesised" to
+                if (card) TransactionChannel.CARD else TransactionChannel.ACCOUNT
+        }
+        return sender to TransactionChannel.OTHER
     }
 
     private fun extractAmount(body: String, defaultCurrency: String): Pair<Long, String>? {

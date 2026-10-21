@@ -21,6 +21,12 @@ A user's manual change of a Transaction's Category. A Correction overrides the m
 ## Bank template
 Per-bank parsing rules (sender IDs, amount/date/merchant patterns) for turning SMS text into a Transaction.
 
+## Account
+The sender plus the last digits of the instrument a Transaction was charged to (for example `SAB 1214`). Used to filter and total spending.
+
+## Channel
+Whether a Transaction was charged through a Card (PoS, online purchase, mada, wallet) or directly from a bank Account (transfer, bill payment, standing order). The card number and the funding account both appear in some SMS; Channel decides which one is the Account.
+
 ## Thread selection
 The user's choice of SMS conversations belonging to banks. Only selected threads are imported.
 

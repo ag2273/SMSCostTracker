@@ -1,6 +1,7 @@
 package com.example.smscosttracker.parsing
 
 import com.example.smscosttracker.data.RawSms
+import com.example.smscosttracker.data.TransactionChannel
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -117,6 +118,7 @@ class TransactionParserTest {
         assertEquals(1000000L, parsed.amountMinor)
         assertEquals("SAR", parsed.currency)
         assertEquals("BANK 3060", parsed.account)
+        assertEquals(TransactionChannel.ACCOUNT, parsed.channel)
     }
 
     @Test
@@ -149,6 +151,7 @@ class TransactionParserTest {
         )!!
 
         assertEquals("BANK 1214", parsed.account)
+        assertEquals(TransactionChannel.CARD, parsed.channel)
     }
 
     @Test
@@ -160,5 +163,19 @@ class TransactionParserTest {
         )!!
 
         assertEquals("BANK 1214", parsed.account)
+        assertEquals(TransactionChannel.CARD, parsed.channel)
+    }
+
+    @Test
+    fun `assigns account debits to the account, not the card`() {
+        val parsed = TransactionParser.parse(
+            message(
+                "Bill Payment\nFrom: ***001\nTo: ELECTRICITY CO\n" +
+                    "Amount: SAR 250.00 on 2026-09-12 10:00:00"
+            )
+        )!!
+
+        assertEquals("BANK 001", parsed.account)
+        assertEquals(TransactionChannel.ACCOUNT, parsed.channel)
     }
 }

@@ -67,6 +67,7 @@ import com.example.smscosttracker.classification.Category
 import com.example.smscosttracker.data.AppDatabase
 import com.example.smscosttracker.data.RawSmsEntity
 import com.example.smscosttracker.data.TransactionEntity
+import com.example.smscosttracker.data.TransactionChannel
 import com.example.smscosttracker.data.TransactionImporter
 import com.example.smscosttracker.data.TransactionRepository
 import com.example.smscosttracker.sms.SmsReader
@@ -656,6 +657,14 @@ private fun TransactionRow(
                 formatter.format(Instant.ofEpochMilli(transaction.occurredAt)),
                 style = MaterialTheme.typography.labelSmall
             )
+            val channel = TransactionChannel.fromStorage(transaction.channel)
+            val instrument = listOfNotNull(
+                transaction.account.takeIf { it.isNotBlank() },
+                channel.label.takeIf { channel != TransactionChannel.OTHER }
+            ).joinToString(" · ")
+            if (instrument.isNotBlank()) {
+                Text(instrument, style = MaterialTheme.typography.labelSmall)
+            }
             Text("Tap for source SMS", style = MaterialTheme.typography.labelSmall)
         }
         Column(horizontalAlignment = Alignment.End) {
@@ -704,6 +713,11 @@ private fun TransactionDetailDialog(
                 Text("Parsed merchant: ${transaction.merchant}")
                 Text("Parsed date: ${formatter.format(Instant.ofEpochMilli(transaction.occurredAt))}")
                 Text("Sender: ${transaction.sourceAddress}")
+                Text("Account: ${transaction.account.ifBlank { "Unknown" }}")
+                Text(
+                    "Instrument: " +
+                        TransactionChannel.fromStorage(transaction.channel).label
+                )
                 Text("Raw SMS near this date:", style = MaterialTheme.typography.titleSmall)
                 if (loading) {
                     CircularProgressIndicator()
