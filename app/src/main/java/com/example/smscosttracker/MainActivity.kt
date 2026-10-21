@@ -27,6 +27,7 @@ import com.example.smscosttracker.ui.CrashReportScreen
 import com.example.smscosttracker.ui.components.LedgerBottomBar
 import com.example.smscosttracker.ui.onboarding.OnboardingFlow
 import com.example.smscosttracker.ui.screens.ActivityScreen
+import com.example.smscosttracker.ui.screens.ExportScreen
 import com.example.smscosttracker.ui.screens.HomeScreen
 import com.example.smscosttracker.ui.screens.InsightsScreen
 import com.example.smscosttracker.ui.screens.InstrumentsScreen
@@ -169,6 +170,7 @@ private fun MainShell(
                         onOpenInstruments = { settingsRoute = SettingsRoute.INSTRUMENTS },
                         onOpenUnparsed = { settingsRoute = SettingsRoute.UNPARSED },
                         onOpenReimport = { settingsRoute = SettingsRoute.REIMPORT },
+                        onOpenExport = { settingsRoute = SettingsRoute.EXPORT },
                         onRestartOnboarding = onRestartOnboarding
                     )
                     SettingsRoute.INSTRUMENTS -> InstrumentsScreen(
@@ -194,6 +196,11 @@ private fun MainShell(
                             onDataChanged()
                             settingsRoute = SettingsRoute.OVERVIEW
                         }
+                    )
+                    SettingsRoute.EXPORT -> ExportScreen(
+                        repository = repository,
+                        refreshKey = refreshKey,
+                        onBack = { settingsRoute = SettingsRoute.OVERVIEW }
                     )
                 }
             }

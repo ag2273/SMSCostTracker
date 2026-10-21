@@ -2,6 +2,7 @@ package com.example.smscosttracker.ui.screens
 
 import android.os.Handler
 import android.os.Looper
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -17,9 +18,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -30,6 +33,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.smscosttracker.analysis.ActivityFilterState
@@ -54,6 +58,7 @@ import com.example.smscosttracker.ui.components.PillTone
 import com.example.smscosttracker.ui.components.ScreenBackground
 import com.example.smscosttracker.ui.components.channelLabel
 import com.example.smscosttracker.ui.components.formatMoney
+import com.example.smscosttracker.ui.components.rememberCsvExport
 import com.example.smscosttracker.ui.sheets.CategorySheet
 import com.example.smscosttracker.ui.sheets.FiltersSheet
 import com.example.smscosttracker.ui.sheets.TransactionDetailSheet
@@ -75,6 +80,10 @@ fun ActivityScreen(
     onDataChanged: () -> Unit
 ) {
     val state = rememberTransactions(repository, refreshKey)
+    val context = LocalContext.current
+    val exportCsv = rememberCsvExport { message ->
+        Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+    }
     val currencies = remember(state.transactions) {
         state.transactions.map { it.currency }.filter { it.isNotBlank() }.distinct().sorted()
     }
@@ -127,7 +136,16 @@ fun ActivityScreen(
         Column(modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 14.dp)) {
             PageHeader(
                 "Activity",
-                "${filtered.size} transactions · ${TransactionFilters.labelFor(filter)}"
+                "${filtered.size} transactions · ${TransactionFilters.labelFor(filter)}",
+                trailing = {
+                    IconButton(onClick = { exportCsv(filtered) }) {
+                        Icon(
+                            Icons.Outlined.FileDownload,
+                            contentDescription = "Export CSV",
+                            tint = Ledger.Ink
+                        )
+                    }
+                }
             )
             Spacer(Modifier.height(14.dp))
             LedgerTextField(

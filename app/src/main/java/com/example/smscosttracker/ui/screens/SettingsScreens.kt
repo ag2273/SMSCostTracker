@@ -32,6 +32,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AccountBalance
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.CreditCard
+import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Refresh
@@ -69,6 +70,7 @@ import com.example.smscosttracker.data.ImportProgress
 import com.example.smscosttracker.data.ImportResult
 import com.example.smscosttracker.data.OnboardingPreferences
 import com.example.smscosttracker.data.TransactionChannel
+import com.example.smscosttracker.data.TransactionEntity
 import com.example.smscosttracker.data.TransactionImporter
 import com.example.smscosttracker.data.TransactionRepository
 import com.example.smscosttracker.data.UnparsedSms
@@ -88,6 +90,7 @@ import com.example.smscosttracker.ui.components.ReviewBanner
 import com.example.smscosttracker.ui.components.ScreenBackground
 import com.example.smscosttracker.ui.components.SecondaryButton
 import com.example.smscosttracker.ui.components.SelectRow
+import com.example.smscosttracker.ui.components.rememberCsvExport
 import com.example.smscosttracker.ui.theme.Ledger
 import java.time.Instant
 import java.time.ZoneId
@@ -99,7 +102,8 @@ enum class SettingsRoute {
     OVERVIEW,
     INSTRUMENTS,
     UNPARSED,
-    REIMPORT
+    REIMPORT,
+    EXPORT
 }
 
 private data class SettingsStats(
@@ -119,6 +123,7 @@ fun SettingsScreen(
     onOpenInstruments: () -> Unit,
     onOpenUnparsed: () -> Unit,
     onOpenReimport: () -> Unit,
+    onOpenExport: () -> Unit,
     onRestartOnboarding: () -> Unit
 ) {
     val context = LocalContext.current
@@ -182,6 +187,19 @@ fun SettingsScreen(
             }
 
             Spacer(Modifier.height(18.dp))
+            SectionLabel("EXPORT")
+            LedgerCard {
+                Column {
+                    SelectRow(
+                        label = "Export CSV",
+                        value = "Download transactions as a spreadsheet",
+                        icon = Icons.Outlined.FileDownload,
+                        onClick = onOpenExport
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(18.dp))
             SectionLabel("STORAGE")
             LedgerCard {
                 Column {
@@ -239,8 +257,15 @@ fun SettingsScreen(
                     LedgerDivider()
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
+                        Icon(
+                            Icons.Outlined.Check,
+                            contentDescription = null,
+                            tint = Ledger.Primary,
+                            modifier = Modifier.size(18.dp)
+                        )
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 "Onboarding",
@@ -529,6 +554,116 @@ private fun ChoicePill(
                 style = MaterialTheme.typography.labelMedium,
                 color = if (selected) Ledger.Primary else Ledger.Ink
             )
+        }
+    }
+}
+
+@Composable
+fun ExportScreen(
+    repository: TransactionRepository,
+    refreshKey: Int,
+    onBack: () -> Unit
+) {
+    var transactions by remember { mutableStateOf<List<TransactionEntity>>(emptyList()) }
+    var loading by remember { mutableStateOf(true) }
+    var status by remember { mutableStateOf<String?>(null) }
+    val export = rememberCsvExport { status = it }
+
+    LaunchedEffect(refreshKey) {
+        loading = true
+        thread {
+            val loaded = repository.transactions()
+            Handler(Looper.getMainLooper()).post {
+                transactions = loaded
+                loading = false
+            }
+        }
+    }
+
+    val currencies = transactions.map { it.currency }.filter { it.isNotBlank() }.distinct().sorted()
+    val scope = when {
+        loading -> "Loading…"
+        transactions.isEmpty() -> "No transactions to export"
+        currencies.isEmpty() -> "CSV · ${"%,d".format(transactions.size)} transactions"
+        else -> "CSV · ${"%,d".format(transactions.size)} transactions · ${currencies.joinToString(" + ")}"
+    }
+
+    ScreenBackground {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp, vertical = 14.dp)
+        ) {
+            PageHeader(
+                title = "Export & backup",
+                subtitle = "You choose what leaves this phone",
+                onBack = onBack
+            )
+            Spacer(Modifier.height(16.dp))
+            SectionLabel("EXPORT")
+            LedgerCard {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(11.dp)
+                    ) {
+                        Icon(
+                            Icons.Outlined.FileDownload,
+                            contentDescription = null,
+                            tint = Ledger.Primary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "Export transactions",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = Ledger.Ink
+                            )
+                            Text(scope, style = MaterialTheme.typography.labelSmall, color = Ledger.Muted)
+                        }
+                    }
+                    Text(
+                        "Dates, merchants, categories, amounts, currencies and instruments. No SMS text is included.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Ledger.Muted,
+                        modifier = Modifier.padding(top = 10.dp)
+                    )
+                    Spacer(Modifier.height(14.dp))
+                    PrimaryButton(
+                        text = "Export CSV",
+                        onClick = { export(transactions) },
+                        enabled = !loading && transactions.isNotEmpty()
+                    )
+                    status?.let {
+                        Text(
+                            it,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Ledger.Primary,
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(18.dp))
+            SectionLabel("PRIVACY")
+            LedgerCard {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        "What leaves your phone?",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = Ledger.Ink
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "Only the CSV file you explicitly create. SMS text stays on this device and is never uploaded.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Ledger.Muted
+                    )
+                }
+            }
+            Spacer(Modifier.height(26.dp))
         }
     }
 }
