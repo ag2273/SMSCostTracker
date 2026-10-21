@@ -3,6 +3,13 @@ plugins {
     id 'org.jetbrains.kotlin.android'
     id 'com.google.devtools.ksp'
 }
+
+def keystoreProperties = new Properties()
+def keystorePropertiesFile = rootProject.file("local.properties")
+if (keystorePropertiesFile.exists()) {
+    keystorePropertiesFile.withInputStream { keystoreProperties.load(it) }
+}
+
 android {
     namespace 'com.example.smscosttracker'
     compileSdk 34
@@ -12,6 +19,22 @@ android {
         targetSdk 34
         versionCode 1
         versionName "1.0"
+    }
+    signingConfigs {
+        release {
+            if (keystoreProperties['RELEASE_STORE_FILE']) {
+                storeFile rootProject.file(keystoreProperties['RELEASE_STORE_FILE'])
+                storePassword keystoreProperties['RELEASE_STORE_PASSWORD']
+                keyAlias keystoreProperties['RELEASE_KEY_ALIAS']
+                keyPassword keystoreProperties['RELEASE_KEY_PASSWORD']
+            }
+        }
+    }
+    buildTypes {
+        release {
+            signingConfig signingConfigs.release
+            minifyEnabled false
+        }
     }
     buildFeatures { compose true }
     composeOptions { kotlinCompilerExtensionVersion '1.5.14' }
