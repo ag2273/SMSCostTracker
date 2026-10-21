@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -31,6 +32,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Divider
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
@@ -39,6 +41,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -61,6 +64,7 @@ import com.example.smscosttracker.analysis.TransactionFilterState
 import com.example.smscosttracker.analysis.TransactionFilters
 import com.example.smscosttracker.classification.Category
 import com.example.smscosttracker.data.AppDatabase
+import com.example.smscosttracker.data.RawSmsEntity
 import com.example.smscosttracker.data.TransactionEntity
 import com.example.smscosttracker.data.TransactionImporter
 import com.example.smscosttracker.data.TransactionRepository
@@ -293,6 +297,7 @@ private fun rememberTransactions(
 @Composable
 private fun TransactionsScreen(repository: TransactionRepository, refreshKey: Int) {
     var filter by remember { mutableStateOf(TransactionFilterState()) }
+    var detail by remember { mutableStateOf<TransactionEntity?>(null) }
     val state = rememberTransactions(repository, refreshKey)
     val filtered = TransactionFilters.apply(state.transactions, filter)
 
@@ -312,6 +317,7 @@ private fun TransactionsScreen(repository: TransactionRepository, refreshKey: In
                 items(filtered, key = { it.id }) { transaction ->
                     TransactionRow(
                         transaction = transaction,
+                        onDetails = { detail = transaction },
                         onCategorySelected = { category ->
                             thread {
                                 repository.updateCategory(transaction, category)
@@ -323,6 +329,14 @@ private fun TransactionsScreen(repository: TransactionRepository, refreshKey: In
                 }
             }
         }
+    }
+
+    detail?.let { transaction ->
+        TransactionDetailDialog(
+            transaction = transaction,
+            repository = repository,
+            onDismiss = { detail = null }
+        )
     }
 }
 
@@ -568,6 +582,7 @@ private fun DateField(
 @Composable
 private fun TransactionRow(
     transaction: TransactionEntity,
+    onDetails: () -> Unit,
     onCategorySelected: (Category) -> Unit
 ) {
     val formatter = remember {
@@ -577,12 +592,13 @@ private fun TransactionRow(
         modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(modifier = Modifier.weight(1f)) {
+        Column(modifier = Modifier.weight(1f).clickable(onClick = onDetails)) {
             Text(transaction.merchant, style = MaterialTheme.typography.titleSmall)
             Text(
                 formatter.format(Instant.ofEpochMilli(transaction.occurredAt)),
                 style = MaterialTheme.typography.labelSmall
             )
+            Text("Tap for source SMS", style = MaterialTheme.typography.labelSmall)
         }
         Column(horizontalAlignment = Alignment.End) {
             Text(formatAmount(transaction.amountMinor, transaction.currency))
@@ -596,6 +612,62 @@ private fun TransactionRow(
             )
         }
     }
+}
+
+@Composable
+private fun TransactionDetailDialog(
+    transaction: TransactionEntity,
+    repository: TransactionRepository,
+    onDismiss: () -> Unit
+) {
+    var messages by remember { mutableStateOf<List<RawSmsEntity>>(emptyList()) }
+    var loading by remember { mutableStateOf(true) }
+    val formatter = remember {
+        DateTimeFormatter.ofPattern("d MMM yyyy HH:mm").withZone(ZoneId.systemDefault())
+    }
+
+    LaunchedEffect(transaction.id) {
+        thread {
+            val loaded = repository.rawMessagesFor(transaction)
+            Handler(Looper.getMainLooper()).post {
+                messages = loaded
+                loading = false
+            }
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        title = { Text("Transaction source") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Parsed amount: ${formatAmount(transaction.amountMinor, transaction.currency)}")
+                Text("Parsed merchant: ${transaction.merchant}")
+                Text("Parsed date: ${formatter.format(Instant.ofEpochMilli(transaction.occurredAt))}")
+                Text("Sender: ${transaction.sourceAddress}")
+                Text("Raw SMS near this date:", style = MaterialTheme.typography.titleSmall)
+                if (loading) {
+                    CircularProgressIndicator()
+                } else if (messages.isEmpty()) {
+                    Text("No stored SMS found for this sender and date.")
+                } else {
+                    LazyColumn(modifier = Modifier.heightIn(max = 280.dp)) {
+                        items(messages, key = { it.id }) { message ->
+                            Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                                Text(
+                                    formatter.format(Instant.ofEpochMilli(message.date)),
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                                Text(message.body, style = MaterialTheme.typography.bodySmall)
+                                Divider()
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    )
 }
 
 @Composable

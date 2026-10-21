@@ -11,6 +11,12 @@ interface RawSmsDao {
 
     @Query("SELECT COUNT(*) FROM raw_sms")
     fun count(): Int
+
+    @Query(
+        "SELECT * FROM raw_sms WHERE address = :address AND date BETWEEN :from AND :to " +
+            "ORDER BY date DESC LIMIT 20"
+    )
+    fun messagesFor(address: String, from: Long, to: Long): List<RawSmsEntity>
 }
 
 @Dao

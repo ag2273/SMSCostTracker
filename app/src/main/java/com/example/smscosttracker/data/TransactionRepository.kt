@@ -8,6 +8,15 @@ class TransactionRepository(private val database: AppDatabase) {
 
     fun count(): Int = database.transactionDao().count()
 
+    fun rawMessagesFor(transaction: TransactionEntity): List<RawSmsEntity> {
+        val window = 45L * 24 * 60 * 60 * 1000
+        return database.rawSmsDao().messagesFor(
+            address = transaction.sourceAddress,
+            from = transaction.occurredAt - window,
+            to = transaction.occurredAt + window
+        )
+    }
+
     fun updateCategory(transaction: TransactionEntity, category: Category) {
         database.transactionDao().updateCategoryByMerchant(transaction.merchant, category.displayName)
         database.categoryCorrectionDao().upsert(
