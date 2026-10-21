@@ -39,6 +39,10 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val crashFile = File(filesDir, "last_crash.txt")
+        val lastUpdate = runCatching {
+            packageManager.getPackageInfo(packageName, 0).lastUpdateTime
+        }.getOrDefault(0L)
+        if (crashFile.isFile && crashFile.lastModified() < lastUpdate) crashFile.delete()
         val previousHandler = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
             runCatching { crashFile.writeText(throwable.stackTraceToString()) }

@@ -1082,8 +1082,9 @@ private fun CompleteScreen(
     LaunchedEffect(Unit) {
         thread {
             val detected = repository.detectedInstruments()
+            val count = repository.count()
             Handler(Looper.getMainLooper()).post {
-                transactionCount = repository.count()
+                transactionCount = count
                 totalInstruments = detected.size
                 pending = detected.count { !it.verified }
             }
