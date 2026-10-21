@@ -303,6 +303,42 @@ class TransactionParserTest {
 
 
     @Test
+    fun `parses labelled currency with a colon`() {
+        val parsed = TransactionParser.parse(
+            message(
+                "Online Purchase\n" +
+                    "SAB Mastercard Premier Credit Card (0542) was used at CLOUDFLARE " +
+                    "for USD 8.20 in UNITED STATES\n" +
+                    "Exchange rate: 3.75366\n" +
+                    "Amount in SAR: 30.78\n" +
+                    "International Fees in SAR: 0.70\n" +
+                    "Total amount in SAR: 31.48\n" +
+                    "Date: 2026-10-17 21:09:13\n" +
+                    "Balance: SAR 51954.06"
+            )
+        )!!
+
+        assertEquals(3078L, parsed.amountMinor)
+        assertEquals("SAR", parsed.currency)
+        assertEquals("CLOUDFLARE", parsed.merchant)
+    }
+
+    @Test
+    fun `ignores statement amount due messages`() {
+        assertNull(
+            TransactionParser.parse(
+                message(
+                    "Dear Customer,\n" +
+                        "Your Mastercard Premier Credit Card (0542) statement has been issued\n" +
+                        "Acc No: 13629290068\n" +
+                        "Amount Due: SAR 401.00\n" +
+                        "Due Date: 2026-11-10 23:59:59"
+                )
+            )
+        )
+    }
+
+    @Test
     fun `strips trailing currency phrase from merchant`() {
         val parsed = TransactionParser.parse(
             message("Purchase at Amazon Now for SAR 51.59 on 2026-09-01 10:00:00")

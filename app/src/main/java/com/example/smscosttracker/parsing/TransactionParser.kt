@@ -21,10 +21,10 @@ object TransactionParser {
     private const val UNKNOWN_MERCHANT = "Unknown"
 
     private val currencyFirst = Regex(
-        "(?i)(EGP|SAR|AED|USD|ريال|جنيه|درهم)\\s*([0-9][0-9,]*(?:\\.[0-9]{1,2})?)"
+        "(?i)(EGP|SAR|AED|USD|ريال|جنيه|درهم)[\\s:=]*([0-9][0-9,]*(?:\\.[0-9]{1,2})?)"
     )
     private val currencyLast = Regex(
-        "(?i)([0-9][0-9,]*(?:\\.[0-9]{1,2})?)\\s*(EGP|SAR|AED|USD|ريال|جنيه|درهم)"
+        "(?i)([0-9][0-9,]*(?:\\.[0-9]{1,2})?)[\\s:=]*(EGP|SAR|AED|USD|ريال|جنيه|درهم)"
     )
     private val plainAmount = Regex(
         "(?i)(?:amount|debit(?:ed)?|paid|payment|purchase|withdrawal|deducted|spent|charged)" +
@@ -34,7 +34,9 @@ object TransactionParser {
         "(?i)\\b(otp|one[- ]time password|verification code|declined|failed|not processed|" +
             "between your accounts|between own accounts|internal transfer|" +
             "credit card\\s*:\\s*payment|credit card payment|card\\s*:\\s*payment|" +
-            "card repayment|payment to (?:your )?(?:credit )?card)\\b"
+            "card repayment|payment to (?:your )?(?:credit )?card|" +
+            "amount due|minimum due|total due|payment due|due date|" +
+            "statement(?: has been)? issued|statement date|closing balance)\\b"
     )
     private val creditOrRefund = Regex(
         "(?i)\\b(refund|refunded|credited|credit transfer|deposited|deposit received|" +
