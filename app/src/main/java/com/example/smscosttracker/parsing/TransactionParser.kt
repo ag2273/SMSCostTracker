@@ -127,6 +127,7 @@ object TransactionParser {
         ) {
             val value = digits?.trim()
             if (value.isNullOrEmpty() || value.length !in 3..6) return
+            if (channel == TransactionChannel.CARD && value.length > 4) return
             if (rejectYear && value.length == 4 && value.toIntOrNull() in 1900..2100) return
             val existing = found[value]
             if (existing == null || priority > existing.second) {

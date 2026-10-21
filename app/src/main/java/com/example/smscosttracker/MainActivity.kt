@@ -318,7 +318,9 @@ private fun InstrumentReviewDialog(
 ) {
     fun key(instrument: DetectedInstrument) = "${instrument.address}|${instrument.digits}"
     var choices by remember(instruments) {
-        mutableStateOf(instruments.associate { key(it) to it.channel })
+        mutableStateOf(
+            instruments.associate { key(it) to (it.channel as TransactionChannel?) }
+        )
     }
 
     AlertDialog(
@@ -349,16 +351,16 @@ private fun InstrumentReviewDialog(
                                 )
                             }
                             Dropdown(
-                                label = (choices[key(instrument)] ?: instrument.channel)
-                                    .label.replaceFirstChar { it.uppercase() },
-                                options = listOf("Card", "Account"),
+                                label = choices[key(instrument)]?.label
+                                    ?.replaceFirstChar { it.uppercase() }
+                                    ?: "Not an account",
+                                options = listOf("Card", "Account", "Not an account"),
                                 onSelect = { selected ->
-                                    choices = choices + (key(instrument) to
-                                        if (selected == "Card") {
-                                            TransactionChannel.CARD
-                                        } else {
-                                            TransactionChannel.ACCOUNT
-                                        })
+                                    choices = choices + (key(instrument) to when (selected) {
+                                        "Card" -> TransactionChannel.CARD
+                                        "Account" -> TransactionChannel.ACCOUNT
+                                        else -> null
+                                    })
                                 }
                             )
                         }
@@ -372,7 +374,11 @@ private fun InstrumentReviewDialog(
                 onClick = {
                     onSave(
                         instruments.map {
-                            it.copy(channel = choices[key(it)] ?: it.channel)
+                            val choice = choices[key(it)]
+                            it.copy(
+                                channel = choice ?: it.channel,
+                                ignored = choice == null
+                            )
                         }
                     )
                 }

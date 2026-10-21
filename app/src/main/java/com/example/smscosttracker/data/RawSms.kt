@@ -27,5 +27,6 @@ data class DetectedInstrument(
     val digits: String,
     val channel: TransactionChannel,
     val messageCount: Int,
-    val verified: Boolean
+    val verified: Boolean,
+    val ignored: Boolean = false
 )

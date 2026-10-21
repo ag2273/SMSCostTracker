@@ -36,5 +36,6 @@ data class InstrumentEntity(
     val address: String,
     val digits: String,
     val channel: String,
-    val label: String = ""
+    val label: String = "",
+    val ignored: Boolean = false
 )

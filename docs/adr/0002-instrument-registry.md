@@ -14,6 +14,8 @@ rules, but no labelled corpus exists and an on-device LLM is costly.
   stored SMS, grouped by sender.
 - Ask the user once to label each candidate as Card or Account; persist this in
   the `instruments` table keyed by `(address, digits)`.
+- Offer "Not an account" for false positives; ignored entries are persisted and
+  excluded from parsing and future reviews.
 - Parsing consults the registry first. Context only decides between a registered
   card and a registered account: purchases prefer Card, transfers/bills prefer
   Account.

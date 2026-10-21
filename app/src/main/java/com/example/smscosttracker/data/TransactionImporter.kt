@@ -58,10 +58,12 @@ class TransactionImporter(
         })
 
     private fun parseAll(messages: List<RawSms>): List<ParsedTransaction> {
-        val instruments = database.instrumentDao().getAll().associate {
-            TransactionParser.instrumentKey(it.address, it.digits) to
-                TransactionChannel.fromStorage(it.channel)
-        }
+        val instruments = database.instrumentDao().getAll()
+            .filterNot { it.ignored }
+            .associate {
+                TransactionParser.instrumentKey(it.address, it.digits) to
+                    TransactionChannel.fromStorage(it.channel)
+            }
         return messages.mapNotNull { parser.parse(it, instruments = instruments) }
     }
 

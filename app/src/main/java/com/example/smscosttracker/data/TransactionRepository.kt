@@ -41,15 +41,17 @@ class TransactionRepository(private val database: AppDatabase) {
                     .merge(candidate.channel, 1, Int::plus)
             }
         }
-        return counts.map { (key, channels) ->
+        return counts.mapNotNull { (key, channels) ->
             val stored = configured[TransactionParser.instrumentKey(key.first, key.second)]
+            if (stored?.ignored == true) return@mapNotNull null
             DetectedInstrument(
                 address = key.first,
                 digits = key.second,
                 channel = stored?.let { TransactionChannel.fromStorage(it.channel) }
                     ?: channels.maxByOrNull { it.value }!!.key,
                 messageCount = channels.values.sum(),
-                verified = stored != null
+                verified = stored != null,
+                ignored = false
             )
         }.sortedWith(compareBy({ it.address }, { it.digits }))
     }
@@ -60,7 +62,8 @@ class TransactionRepository(private val database: AppDatabase) {
                 InstrumentEntity(
                     address = it.address,
                     digits = it.digits,
-                    channel = it.channel.name
+                    channel = it.channel.name,
+                    ignored = it.ignored
                 )
             }
         )
@@ -81,7 +84,13 @@ class TransactionRepository(private val database: AppDatabase) {
         } else {
             emptyList()
         }
-        return (fromMessages + current).distinctBy { it.digits }
+        val ignored = database.instrumentDao().getAll()
+            .filter { it.ignored && it.address == transaction.sourceAddress }
+            .map { it.digits }
+            .toSet()
+        return (fromMessages + current)
+            .filterNot { it.digits in ignored }
+            .distinctBy { it.digits }
     }
 
     fun assignInstrument(

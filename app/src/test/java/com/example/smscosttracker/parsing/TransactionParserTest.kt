@@ -259,4 +259,20 @@ class TransactionParserTest {
             )
         )
     }
+
+    @Test
+    fun `does not treat long reference numbers as cards`() {
+        assertEquals(
+            emptyList<InstrumentCandidate>(),
+            TransactionParser.candidates("Card reference 113038 for your request")
+        )
+    }
+
+    @Test
+    fun `allows six digit account numbers`() {
+        assertEquals(
+            listOf(InstrumentCandidate("154313", TransactionChannel.ACCOUNT)),
+            TransactionParser.candidates("Account: 154313")
+        )
+    }
 }
