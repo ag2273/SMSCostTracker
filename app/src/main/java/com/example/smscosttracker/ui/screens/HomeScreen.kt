@@ -1,6 +1,5 @@
 package com.example.smscosttracker.ui.screens
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -36,14 +35,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.example.smscosttracker.analysis.CategoryTotal
 import com.example.smscosttracker.analysis.DatePreset
 import com.example.smscosttracker.analysis.HomeFilterState
 import com.example.smscosttracker.analysis.HomePeriodUnit
@@ -55,6 +49,7 @@ import com.example.smscosttracker.data.TransactionChannel
 import com.example.smscosttracker.data.TransactionEntity
 import com.example.smscosttracker.data.TransactionRepository
 import com.example.smscosttracker.ui.components.Avatar
+import com.example.smscosttracker.ui.components.CategoryChart
 import com.example.smscosttracker.ui.components.ChannelIcon
 import com.example.smscosttracker.ui.components.DropdownChip
 import com.example.smscosttracker.ui.components.EmptyState
@@ -69,7 +64,6 @@ import com.example.smscosttracker.ui.components.ReviewBanner
 import com.example.smscosttracker.ui.components.ScreenBackground
 import com.example.smscosttracker.ui.components.SectionRow
 import com.example.smscosttracker.ui.components.channelLabel
-import com.example.smscosttracker.ui.components.formatCompactMoney
 import com.example.smscosttracker.ui.components.formatMoney
 import com.example.smscosttracker.ui.theme.Ledger
 import com.example.smscosttracker.ui.theme.LedgerChartColors
@@ -132,15 +126,7 @@ fun HomeScreen(
         periodTransactions.sortedByDescending { it.occurredAt }.take(3)
     }
     val categoryRows = remember(summary.byCategory) {
-        val sorted = summary.byCategory.sortedByDescending { it.amountMinor }
-        if (sorted.size <= 4) {
-            sorted
-        } else {
-            sorted.take(3) + CategoryTotal(
-                Category.OTHER,
-                sorted.drop(3).sumOf { it.amountMinor }
-            )
-        }
+        SpendingAnalysis.collapseIntoOther(summary.byCategory, maxRows = 4)
     }
 
     ScreenBackground {
@@ -222,38 +208,12 @@ fun HomeScreen(
                 LedgerCard {
                     Column(modifier = Modifier.padding(16.dp)) {
                         SectionRow(title = "Top categories", action = "See all", onAction = onOpenActivity)
-                        if (categoryRows.isEmpty()) {
-                            Text(
-                                "No spending in this period.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = Ledger.Muted,
-                                modifier = Modifier.padding(top = 12.dp)
-                            )
-                        } else {
-                            Row(
-                                modifier = Modifier.padding(top = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(16.dp)
-                            ) {
-                                CategoryDonut(
-                                    rows = categoryRows,
-                                    totalMinor = summary.totalMinor,
-                                    currency = currency
-                                )
-                                Column(
-                                    modifier = Modifier.weight(1f),
-                                    verticalArrangement = Arrangement.spacedBy(7.dp)
-                                ) {
-                                    categoryRows.forEachIndexed { index, row ->
-                                        CategoryLegendRow(
-                                            row = row,
-                                            totalMinor = summary.totalMinor,
-                                            color = LedgerChartColors[index % LedgerChartColors.size]
-                                        )
-                                    }
-                                }
-                            }
-                        }
+                        CategoryChart(
+                            rows = categoryRows,
+                            totalMinor = summary.totalMinor,
+                            currency = currency,
+                            modifier = Modifier.padding(top = 10.dp)
+                        )
                     }
                 }
                 Spacer(Modifier.height(18.dp))
@@ -397,67 +357,6 @@ private fun SpendHero(
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun CategoryDonut(
-    rows: List<CategoryTotal>,
-    totalMinor: Long,
-    currency: String
-) {
-    val safeTotal = totalMinor.coerceAtLeast(1)
-    Box(modifier = Modifier.size(108.dp), contentAlignment = Alignment.Center) {
-        Canvas(modifier = Modifier.size(108.dp)) {
-            val stroke = 17.dp.toPx()
-            val inset = stroke / 2
-            val arcSize = Size(size.width - stroke, size.height - stroke)
-            var start = -90f
-            rows.forEachIndexed { index, row ->
-                val sweep = 360f * row.amountMinor / safeTotal
-                drawArc(
-                    color = LedgerChartColors[index % LedgerChartColors.size],
-                    startAngle = start,
-                    sweepAngle = sweep,
-                    useCenter = false,
-                    topLeft = Offset(inset, inset),
-                    size = arcSize,
-                    style = Stroke(width = stroke, cap = StrokeCap.Butt)
-                )
-                start += sweep
-            }
-        }
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                formatCompactMoney(totalMinor, "").trim().removePrefix("?").ifBlank { "0" },
-                style = MaterialTheme.typography.titleMedium,
-                color = Ledger.Ink
-            )
-            Text(currency, style = MaterialTheme.typography.labelSmall, color = Ledger.Muted)
-        }
-    }
-}
-
-@Composable
-private fun CategoryLegendRow(
-    row: CategoryTotal,
-    totalMinor: Long,
-    color: androidx.compose.ui.graphics.Color
-) {
-    val pct = if (totalMinor == 0L) 0 else ((row.amountMinor * 100.0) / totalMinor).toInt()
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(modifier = Modifier.size(8.dp).background(color, CircleShape))
-        Text(
-            row.category.displayName,
-            modifier = Modifier.weight(1f).padding(start = 7.dp),
-            style = MaterialTheme.typography.bodySmall,
-            color = Ledger.Ink
-        )
-        Text(
-            "$pct%",
-            style = MaterialTheme.typography.labelSmall,
-            color = Ledger.Muted
-        )
     }
 }
 

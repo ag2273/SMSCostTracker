@@ -34,6 +34,41 @@ object SpendingAnalysis {
             }
             .sortedByDescending { it.totalMinor }
 
+    fun collapseIntoOther(rows: List<CategoryTotal>, maxRows: Int): List<CategoryTotal> {
+        require(maxRows > 0) { "maxRows must be positive" }
+        val sorted = rows.sortedByDescending { it.amountMinor }
+        if (sorted.size <= maxRows) return sorted
+
+        val head = sorted.take(maxRows - 1)
+        val tailTotal = sorted.drop(maxRows - 1).sumOf { it.amountMinor }
+        return if (head.any { it.category == Category.OTHER }) {
+            head.map {
+                if (it.category == Category.OTHER) {
+                    it.copy(amountMinor = it.amountMinor + tailTotal)
+                } else {
+                    it
+                }
+            }
+        } else {
+            head + CategoryTotal(Category.OTHER, tailTotal)
+        }
+    }
+
+    fun monthlyTrend(
+        transactions: List<TransactionEntity>,
+        months: Int,
+        now: YearMonth = YearMonth.now(),
+        zone: ZoneId = ZoneId.systemDefault()
+    ): List<MonthlyTotal> {
+        require(months > 0) { "months must be positive" }
+        val totals = transactions.monthTotals(zone)
+        val start = now.minusMonths((months - 1).toLong())
+        return generateSequence(start) { it.plusMonths(1) }
+            .take(months)
+            .map { MonthlyTotal(it, totals[it] ?: 0L) }
+            .toList()
+    }
+
     fun summarize(
         transactions: List<TransactionEntity>,
         zone: ZoneId = ZoneId.systemDefault(),
@@ -56,20 +91,13 @@ object SpendingAnalysis {
             .totalsBy { it.account.ifBlank { "Unknown account" } }
             .map { (account, amount) -> AccountTotal(account, amount) }
 
-        val months = transactions.map {
-            YearMonth.from(Instant.ofEpochMilli(it.occurredAt).atZone(zone))
-        }
-        val latest = months.maxOrNull()
+        val totals = transactions.monthTotals(zone)
+        val latest = totals.keys.maxOrNull()
         val byMonth = if (latest == null) {
             emptyList()
         } else {
-            val earliest = months.minOrNull() ?: latest
+            val earliest = totals.keys.min()
             val start = maxOf(earliest, latest.minusMonths((maxMonths - 1).toLong()))
-            val totals = transactions
-                .groupingBy {
-                    YearMonth.from(Instant.ofEpochMilli(it.occurredAt).atZone(zone))
-                }
-                .fold(0L) { sum, transaction -> sum + transaction.amountMinor }
             generateSequence(start) { it.plusMonths(1) }
                 .takeWhile { it <= latest }
                 .map { MonthlyTotal(it, totals[it] ?: 0L) }
@@ -85,6 +113,10 @@ object SpendingAnalysis {
             topMerchants = topMerchants
         )
     }
+
+    private fun List<TransactionEntity>.monthTotals(zone: ZoneId): Map<YearMonth, Long> =
+        groupingBy { YearMonth.from(Instant.ofEpochMilli(it.occurredAt).atZone(zone)) }
+            .fold(0L) { sum, transaction -> sum + transaction.amountMinor }
 
     private fun List<TransactionEntity>.totalsBy(
         key: (TransactionEntity) -> String

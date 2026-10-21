@@ -79,6 +79,34 @@ class SpendingAnalysisTest {
     }
 
     @Test
+    fun `monthly trend ends at the current month including empty months`() {
+        val trend = SpendingAnalysis.monthlyTrend(
+            listOf(
+                transaction(1000L, Category.GROCERIES, "Carrefour", LocalDate.of(2026, 8, 1)),
+                transaction(2000L, Category.GROCERIES, "Panda", LocalDate.of(2026, 10, 1))
+            ),
+            months = 6,
+            now = YearMonth.of(2026, 10),
+            zone = zone
+        )
+
+        assertEquals(
+            listOf(
+                YearMonth.of(2026, 5),
+                YearMonth.of(2026, 6),
+                YearMonth.of(2026, 7),
+                YearMonth.of(2026, 8),
+                YearMonth.of(2026, 9),
+                YearMonth.of(2026, 10)
+            ),
+            trend.map { it.month }
+        )
+        assertEquals(0L, trend.first().amountMinor)
+        assertEquals(1000L, trend[3].amountMinor)
+        assertEquals(2000L, trend.last().amountMinor)
+    }
+
+    @Test
     fun `splits totals per account`() {
         val summary = SpendingAnalysis.summarize(
             listOf(
@@ -108,6 +136,42 @@ class SpendingAnalysisTest {
         assertEquals(2, summary.topMerchants.size)
         assertEquals("Amazon", summary.topMerchants.first().merchant)
         assertEquals(3000L, summary.topMerchants.first().amountMinor)
+    }
+
+    @Test
+    fun `collapses the smaller categories into other`() {
+        val rows = listOf(
+            CategoryTotal(Category.GROCERIES, 5000L),
+            CategoryTotal(Category.DINING, 4000L),
+            CategoryTotal(Category.TRANSPORT, 3000L),
+            CategoryTotal(Category.SHOPPING, 2000L),
+            CategoryTotal(Category.HEALTH, 1000L)
+        )
+
+        val collapsed = SpendingAnalysis.collapseIntoOther(rows, maxRows = 4)
+
+        assertEquals(4, collapsed.size)
+        assertEquals(Category.GROCERIES, collapsed[0].category)
+        assertEquals(Category.TRANSPORT, collapsed[2].category)
+        assertEquals(Category.OTHER, collapsed.last().category)
+        assertEquals(3000L, collapsed.last().amountMinor)
+    }
+
+    @Test
+    fun `collapsing merges the tail into an existing other row`() {
+        val rows = listOf(
+            CategoryTotal(Category.GROCERIES, 5000L),
+            CategoryTotal(Category.OTHER, 4000L),
+            CategoryTotal(Category.DINING, 3000L),
+            CategoryTotal(Category.TRANSPORT, 2000L),
+            CategoryTotal(Category.SHOPPING, 1000L)
+        )
+
+        val collapsed = SpendingAnalysis.collapseIntoOther(rows, maxRows = 3)
+
+        assertEquals(2, collapsed.size)
+        assertEquals(1, collapsed.count { it.category == Category.OTHER })
+        assertEquals(10000L, collapsed.first { it.category == Category.OTHER }.amountMinor)
     }
 
     @Test
