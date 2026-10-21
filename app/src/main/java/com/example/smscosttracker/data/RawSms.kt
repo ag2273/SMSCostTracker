@@ -16,3 +16,16 @@ data class ParsedTransaction(
     val account: String = "",
     val channel: TransactionChannel = TransactionChannel.OTHER
 )
+
+data class InstrumentCandidate(
+    val digits: String,
+    val channel: TransactionChannel
+)
+
+data class DetectedInstrument(
+    val address: String,
+    val digits: String,
+    val channel: TransactionChannel,
+    val messageCount: Int,
+    val verified: Boolean
+)

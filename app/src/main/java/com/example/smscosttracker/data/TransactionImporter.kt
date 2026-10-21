@@ -28,7 +28,7 @@ class TransactionImporter(
                 }
             ).size
 
-            val parsed = messages.mapNotNull { parser.parse(it) }
+            val parsed = parseAll(messages)
             ImportResult(
                 rawInserted = rawInserted,
                 parsed = parsed.size,
@@ -40,22 +40,30 @@ class TransactionImporter(
         database.runInTransaction(Callable {
             val stored = database.rawSmsDao().getAll()
             database.transactionDao().deleteAll()
-            val parsed = stored.mapNotNull {
-                parser.parse(
+            val parsed = parseAll(
+                stored.map {
                     RawSms(
                         address = it.address,
                         body = it.body,
                         date = it.date,
                         threadId = it.threadId
                     )
-                )
-            }
+                }
+            )
             ImportResult(
                 rawInserted = stored.size,
                 parsed = parsed.size,
                 stored = store(parsed)
             )
         })
+
+    private fun parseAll(messages: List<RawSms>): List<ParsedTransaction> {
+        val instruments = database.instrumentDao().getAll().associate {
+            TransactionParser.instrumentKey(it.address, it.digits) to
+                TransactionChannel.fromStorage(it.channel)
+        }
+        return messages.mapNotNull { parser.parse(it, instruments = instruments) }
+    }
 
     private fun store(parsed: List<ParsedTransaction>): Int {
         val existing = database.transactionDao().getAll()

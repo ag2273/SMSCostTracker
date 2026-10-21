@@ -36,6 +36,9 @@ interface TransactionDao {
     @Query("UPDATE transactions SET category = :category WHERE merchant = :merchant")
     fun updateCategoryByMerchant(merchant: String, category: String)
 
+    @Query("UPDATE transactions SET account = :account, channel = :channel WHERE id = :id")
+    fun updateInstrument(id: Long, account: String, channel: String)
+
     @Query("SELECT COUNT(*) FROM transactions")
     fun count(): Int
 
@@ -50,4 +53,13 @@ interface CategoryCorrectionDao {
 
     @Query("SELECT * FROM category_corrections")
     fun getAll(): List<CategoryCorrectionEntity>
+}
+
+@Dao
+interface InstrumentDao {
+    @Insert(onConflict = androidx.room.OnConflictStrategy.REPLACE)
+    fun upsertAll(instruments: List<InstrumentEntity>)
+
+    @Query("SELECT * FROM instruments")
+    fun getAll(): List<InstrumentEntity>
 }

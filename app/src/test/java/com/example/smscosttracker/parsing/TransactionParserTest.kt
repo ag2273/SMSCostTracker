@@ -180,4 +180,54 @@ class TransactionParserTest {
         assertEquals("BANK 001", parsed.account)
         assertEquals(TransactionChannel.ACCOUNT, parsed.channel)
     }
+
+    @Test
+    fun `lists both card and funding account as candidates`() {
+        val candidates = TransactionParser.candidates(
+            "Online Purchase\nBy: ***1214;mada\nFrom: ***001\n" +
+                "Amount: SAR 64.66\nAt: Hungerstation×Riya"
+        )
+
+        assertEquals(
+            setOf(
+                TransactionChannel.CARD to "1214",
+                TransactionChannel.ACCOUNT to "001"
+            ),
+            candidates.map { it.channel to it.digits }.toSet()
+        )
+    }
+
+    @Test
+    fun `registry overrides inferred card type`() {
+        val parsed = TransactionParser.parse(
+            message(
+                "Online Purchase\nBy: ***1214;mada\nFrom: ***001\n" +
+                    "Amount: SAR 64.66\nAt: Hungerstation×Riya"
+            ),
+            instruments = mapOf(
+                TransactionParser.instrumentKey("BANK", "1214") to
+                    TransactionChannel.ACCOUNT
+            )
+        )!!
+
+        assertEquals("BANK 1214", parsed.account)
+        assertEquals(TransactionChannel.ACCOUNT, parsed.channel)
+    }
+
+    @Test
+    fun `registry selects account for transfers`() {
+        val parsed = TransactionParser.parse(
+            message(
+                "Funds Transfer Accepted (sarie)\nFrom: 3060\n" +
+                    "To: BARQ SAFE AND DEPOSIT CLIENT MONEY\nAmount: SAR 10000.00"
+            ),
+            instruments = mapOf(
+                TransactionParser.instrumentKey("BANK", "3060") to
+                    TransactionChannel.ACCOUNT
+            )
+        )!!
+
+        assertEquals("BANK 3060", parsed.account)
+        assertEquals(TransactionChannel.ACCOUNT, parsed.channel)
+    }
 }

@@ -30,3 +30,11 @@ data class CategoryCorrectionEntity(
     @PrimaryKey val merchantKey: String,
     val category: String
 )
+
+@Entity(tableName = "instruments", primaryKeys = ["address", "digits"])
+data class InstrumentEntity(
+    val address: String,
+    val digits: String,
+    val channel: String,
+    val label: String = ""
+)

@@ -8,14 +8,20 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [RawSmsEntity::class, TransactionEntity::class, CategoryCorrectionEntity::class],
-    version = 4,
+    entities = [
+        RawSmsEntity::class,
+        TransactionEntity::class,
+        CategoryCorrectionEntity::class,
+        InstrumentEntity::class
+    ],
+    version = 5,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun rawSmsDao(): RawSmsDao
     abstract fun transactionDao(): TransactionDao
     abstract fun categoryCorrectionDao(): CategoryCorrectionDao
+    abstract fun instrumentDao(): InstrumentDao
 
     companion object {
         @Volatile
@@ -47,14 +53,25 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `instruments` " +
+                        "(`address` TEXT NOT NULL, `digits` TEXT NOT NULL, " +
+                        "`channel` TEXT NOT NULL, `label` TEXT NOT NULL DEFAULT '', " +
+                        "PRIMARY KEY(`address`, `digits`))"
+                )
+            }
+        }
+
         fun get(context: Context): AppDatabase =
             instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
                     context.applicationContext,
                     AppDatabase::class.java,
                     "sms_cost_tracker.db"
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4).build()
-                    .also { instance = it }
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                    .build().also { instance = it }
             }
     }
 }

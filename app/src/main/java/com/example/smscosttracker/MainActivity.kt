@@ -65,6 +65,8 @@ import com.example.smscosttracker.analysis.TransactionFilterState
 import com.example.smscosttracker.analysis.TransactionFilters
 import com.example.smscosttracker.classification.Category
 import com.example.smscosttracker.data.AppDatabase
+import com.example.smscosttracker.data.DetectedInstrument
+import com.example.smscosttracker.data.InstrumentCandidate
 import com.example.smscosttracker.data.RawSmsEntity
 import com.example.smscosttracker.data.TransactionEntity
 import com.example.smscosttracker.data.TransactionChannel
@@ -149,6 +151,8 @@ private fun ImportScreen(
     var selected by remember { mutableStateOf<Set<Long>>(emptySet()) }
     var loading by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf("") }
+    var reviewItems by remember { mutableStateOf<List<DetectedInstrument>?>(null) }
+    var reviewing by remember { mutableStateOf(false) }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -257,11 +261,127 @@ private fun ImportScreen(
             ) {
                 Text("Rebuild from stored SMS")
             }
+            Button(
+                enabled = !loading && !reviewing,
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                onClick = {
+                    reviewing = true
+                    thread {
+                        val detected = repository.detectedInstruments()
+                        Handler(Looper.getMainLooper()).post {
+                            reviewing = false
+                            if (detected.isEmpty()) {
+                                status = "No card or account numbers detected yet. Import SMS first."
+                            } else {
+                                reviewItems = detected
+                            }
+                        }
+                    }
+                }
+            ) {
+                Text(if (reviewing) "Scanning stored SMS…" else "Review accounts & cards")
+            }
         }
         if (status.isNotEmpty()) {
             Text(status, modifier = Modifier.padding(top = 8.dp))
         }
     }
+
+    reviewItems?.let { instruments ->
+        InstrumentReviewDialog(
+            instruments = instruments,
+            onDismiss = { reviewItems = null },
+            onSave = { choices ->
+                reviewItems = null
+                loading = true
+                thread {
+                    repository.saveInstruments(choices)
+                    val result = importer.rebuildFromStored()
+                    val total = repository.count()
+                    Handler(Looper.getMainLooper()).post {
+                        loading = false
+                        onImported()
+                        status = "Saved ${choices.size} card/account type(s), " +
+                            "rebuilt ${result.stored} transactions. Total: $total."
+                    }
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun InstrumentReviewDialog(
+    instruments: List<DetectedInstrument>,
+    onDismiss: () -> Unit,
+    onSave: (List<DetectedInstrument>) -> Unit
+) {
+    fun key(instrument: DetectedInstrument) = "${instrument.address}|${instrument.digits}"
+    var choices by remember(instruments) {
+        mutableStateOf(instruments.associate { key(it) to it.channel })
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Accounts & cards") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "Tell the app which numbers are cards and which are bank accounts. " +
+                        "This is applied to imported SMS and remembered for this sender.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                LazyColumn(modifier = Modifier.heightIn(max = 380.dp)) {
+                    items(instruments, key = { key(it) }) { instrument ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    "${instrument.address} · ${instrument.digits}",
+                                    style = MaterialTheme.typography.titleSmall
+                                )
+                                Text(
+                                    "${instrument.messageCount} message(s)" +
+                                        if (instrument.verified) " · saved" else "",
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                            }
+                            Dropdown(
+                                label = (choices[key(instrument)] ?: instrument.channel)
+                                    .label.replaceFirstChar { it.uppercase() },
+                                options = listOf("Card", "Account"),
+                                onSelect = { selected ->
+                                    choices = choices + (key(instrument) to
+                                        if (selected == "Card") {
+                                            TransactionChannel.CARD
+                                        } else {
+                                            TransactionChannel.ACCOUNT
+                                        })
+                                }
+                            )
+                        }
+                        Divider()
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    onSave(
+                        instruments.map {
+                            it.copy(channel = choices[key(it)] ?: it.channel)
+                        }
+                    )
+                }
+            ) {
+                Text("Save & rebuild")
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+    )
 }
 
 @Composable
@@ -360,7 +480,11 @@ private fun TransactionsScreen(repository: TransactionRepository, refreshKey: In
         TransactionDetailDialog(
             transaction = transaction,
             repository = repository,
-            onDismiss = { detail = null }
+            onDismiss = { detail = null },
+            onInstrumentChanged = {
+                detail = null
+                state.reload()
+            }
         )
     }
 }
@@ -685,9 +809,11 @@ private fun TransactionRow(
 private fun TransactionDetailDialog(
     transaction: TransactionEntity,
     repository: TransactionRepository,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onInstrumentChanged: () -> Unit
 ) {
     var messages by remember { mutableStateOf<List<RawSmsEntity>>(emptyList()) }
+    var candidates by remember { mutableStateOf<List<InstrumentCandidate>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
     val formatter = remember {
         DateTimeFormatter.ofPattern("d MMM yyyy HH:mm").withZone(ZoneId.systemDefault())
@@ -696,8 +822,10 @@ private fun TransactionDetailDialog(
     LaunchedEffect(transaction.id) {
         thread {
             val loaded = repository.rawMessagesFor(transaction)
+            val options = repository.candidateInstruments(transaction)
             Handler(Looper.getMainLooper()).post {
                 messages = loaded
+                candidates = options
                 loading = false
             }
         }
@@ -718,6 +846,33 @@ private fun TransactionDetailDialog(
                     "Instrument: " +
                         TransactionChannel.fromStorage(transaction.channel).label
                 )
+                if (candidates.isNotEmpty()) {
+                    Text("Wrong card/account?", style = MaterialTheme.typography.titleSmall)
+                    Dropdown(
+                        label = "Choose the correct instrument",
+                        options = candidates.map {
+                            it.channel.label.replaceFirstChar { c -> c.uppercase() } +
+                                " · " + it.digits
+                        },
+                        onSelect = { label ->
+                            candidates.firstOrNull {
+                                it.channel.label.replaceFirstChar { c -> c.uppercase() } +
+                                    " · " + it.digits == label
+                            }?.let { candidate ->
+                                thread {
+                                    repository.assignInstrument(transaction, candidate)
+                                    Handler(Looper.getMainLooper()).post {
+                                        onInstrumentChanged()
+                                    }
+                                }
+                            }
+                        }
+                    )
+                    Text(
+                        "Saved for this sender. Run Rebuild to apply it to all stored SMS.",
+                        style = MaterialTheme.typography.labelSmall
+                    )
+                }
                 Text("Raw SMS near this date:", style = MaterialTheme.typography.titleSmall)
                 if (loading) {
                     CircularProgressIndicator()

@@ -1,5 +1,6 @@
 package com.example.smscosttracker.parsing
 
+import com.example.smscosttracker.data.InstrumentCandidate
 import com.example.smscosttracker.data.ParsedTransaction
 import com.example.smscosttracker.data.RawSms
 import com.example.smscosttracker.data.TransactionChannel
@@ -73,12 +74,16 @@ object TransactionParser {
             "direct debit|cheque|salary)\\b"
     )
 
-    fun parse(message: RawSms, defaultCurrency: String = "EGP"): ParsedTransaction? {
+    fun parse(
+        message: RawSms,
+        defaultCurrency: String = "EGP",
+        instruments: Map<String, TransactionChannel> = emptyMap()
+    ): ParsedTransaction? {
         val body = message.body
         if (nonTransaction.containsMatchIn(body)) return null
         if (creditOrRefund.containsMatchIn(body)) return null
         val amount = extractAmount(body, defaultCurrency) ?: return null
-        val instrument = extractInstrument(body, message.address)
+        val instrument = extractInstrument(body, message.address, instruments)
         return ParsedTransaction(
             amountMinor = amount.first,
             currency = amount.second,
@@ -90,49 +95,63 @@ object TransactionParser {
         )
     }
 
-    private fun extractInstrument(
-        body: String,
-        sender: String
-    ): Pair<String, TransactionChannel> {
-        val cardDigits = firstGroup(cardPatterns, body)
-        val accountDigits = accountPattern.find(body)?.groupValues?.get(1)?.trim()
-        val accountFirst = accountContext.containsMatchIn(body)
+    fun instrumentKey(address: String, digits: String): String = "$address|$digits"
 
-        if (accountFirst) {
-            if (!accountDigits.isNullOrEmpty()) {
-                return "$sender $accountDigits" to TransactionChannel.ACCOUNT
-            }
-            if (!cardDigits.isNullOrEmpty()) {
-                return "$sender $cardDigits" to TransactionChannel.CARD
-            }
-        } else {
-            if (!cardDigits.isNullOrEmpty()) {
-                return "$sender $cardDigits" to TransactionChannel.CARD
-            }
-            if (!accountDigits.isNullOrEmpty()) {
-                return "$sender $accountDigits" to TransactionChannel.ACCOUNT
+    fun candidates(body: String): List<InstrumentCandidate> {
+        val found = LinkedHashMap<String, Pair<TransactionChannel, Int>>()
+        fun add(digits: String?, channel: TransactionChannel, priority: Int) {
+            val value = digits?.trim()
+            if (value.isNullOrEmpty()) return
+            val existing = found[value]
+            if (existing == null || priority > existing.second) {
+                found[value] = channel to priority
             }
         }
-        val masked = maskedPattern.find(body)?.groupValues?.get(1)?.trim()
-        if (!masked.isNullOrEmpty()) {
-            val card = !accountFirst && cardContext.containsMatchIn(body)
-            return "$sender $masked" to if (card) TransactionChannel.CARD else TransactionChannel.ACCOUNT
+
+        cardPatterns.forEach { pattern ->
+            pattern.findAll(body).forEach { add(it.groupValues[1], TransactionChannel.CARD, 2) }
         }
-        val parenthesised = parenthesisedPattern.find(body)?.groupValues?.get(1)?.trim()
-        if (!parenthesised.isNullOrEmpty()) {
-            val card = !accountFirst && cardContext.containsMatchIn(body)
-            return "$sender $parenthesised" to
-                if (card) TransactionChannel.CARD else TransactionChannel.ACCOUNT
+        accountPattern.findAll(body).forEach {
+            add(it.groupValues[1], TransactionChannel.ACCOUNT, 2)
         }
-        return sender to TransactionChannel.OTHER
+        val guessedCard = cardContext.containsMatchIn(body) &&
+            !accountContext.containsMatchIn(body)
+        maskedPattern.findAll(body).forEach {
+            add(
+                it.groupValues[1],
+                if (guessedCard) TransactionChannel.CARD else TransactionChannel.ACCOUNT,
+                1
+            )
+        }
+        parenthesisedPattern.findAll(body).forEach {
+            add(
+                it.groupValues[1],
+                if (guessedCard) TransactionChannel.CARD else TransactionChannel.ACCOUNT,
+                1
+            )
+        }
+        return found.map { InstrumentCandidate(it.key, it.value.first) }
     }
 
-    private fun firstGroup(patterns: List<Regex>, body: String): String? {
-        for (pattern in patterns) {
-            val digits = pattern.find(body)?.groupValues?.get(1)?.trim()
-            if (!digits.isNullOrEmpty()) return digits
+    private fun extractInstrument(
+        body: String,
+        sender: String,
+        instruments: Map<String, TransactionChannel>
+    ): Pair<String, TransactionChannel> {
+        val candidates = candidates(body).map { candidate ->
+            val configured = instruments[instrumentKey(sender, candidate.digits)]
+            InstrumentCandidate(candidate.digits, configured ?: candidate.channel)
         }
-        return null
+        if (candidates.isEmpty()) return sender to TransactionChannel.OTHER
+        val target = if (accountContext.containsMatchIn(body)) {
+            TransactionChannel.ACCOUNT
+        } else {
+            TransactionChannel.CARD
+        }
+        val chosen = candidates.firstOrNull { it.channel == target }
+            ?: candidates.firstOrNull { it.channel != TransactionChannel.OTHER }
+            ?: candidates.first()
+        return "$sender ${chosen.digits}" to chosen.channel
     }
 
     private fun extractAmount(body: String, defaultCurrency: String): Pair<Long, String>? {

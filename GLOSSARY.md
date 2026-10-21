@@ -27,6 +27,12 @@ The sender plus the last digits of the instrument a Transaction was charged to (
 ## Channel
 Whether a Transaction was charged through a Card (PoS, online purchase, mada, wallet) or directly from a bank Account (transfer, bill payment, standing order). The card number and the funding account both appear in some SMS; Channel decides which one is the Account.
 
+## Instrument
+A number that identifies where money moved: a card last-4 or a bank account number, scoped to the sender.
+
+## Instrument registry
+The user-confirmed map of Instruments to Channels for each sender. It is created by the account/card review step or by correcting a Transaction, and is consulted before fallback parsing.
+
 ## Thread selection
 The user's choice of SMS conversations belonging to banks. Only selected threads are imported.
 
