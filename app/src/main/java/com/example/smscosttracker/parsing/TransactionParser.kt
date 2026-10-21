@@ -40,10 +40,10 @@ object TransactionParser {
             "spent|charged|transfer(?:red)?|pos|cheque|bill)\\b"
     )
     private val merchantPatterns = listOf(
-        Regex("(?i)\\bat\\s+([\\p{L}0-9&.'\\- ]{2,40})"),
-        Regex("(?i)\\bmerchant[:\\s]+([\\p{L}0-9&.'\\- ]{2,40})"),
-        Regex("(?i)\\bto\\s+([\\p{L}0-9&.'\\- ]{2,40})"),
-        Regex("(?i)\\bfrom\\s+([\\p{L}0-9&.'\\- ]{2,40})"),
+        Regex("(?i)\\bat\\s*:?\\s+([\\p{L}0-9&.'×\\- ]{2,40})"),
+        Regex("(?i)\\bmerchant\\s*:?\\s+([\\p{L}0-9&.'×\\- ]{2,40})"),
+        Regex("(?i)\\bto\\s*:?\\s+([\\p{L}0-9&.'×\\- ]{2,40})"),
+        Regex("(?i)\\bfrom\\s*:?\\s+([\\p{L}0-9&.'×\\- ]{2,40})"),
         Regex("(?:لدى|من|في)\\s+([\\p{L}0-9&.'\\- ]{2,40})")
     )
     private val datePatterns = listOf(
@@ -51,8 +51,13 @@ object TransactionParser {
         Regex("\\b(\\d{1,2}/(\\d{1,2})/(\\d{4}))\\b") to DateTimeFormatter.ofPattern("d/M/yyyy"),
         Regex("\\b(\\d{1,2}-(\\d{1,2})-(\\d{4}))\\b") to DateTimeFormatter.ofPattern("d-M-yyyy")
     )
-    private val cardPattern = Regex(
-        "(?i)\\b(?:card|mada|google pay|apple pay)[^0-9\\n]{0,20}[*xX#]*([0-9]{2,6})"
+    private val cardPatterns = listOf(
+        Regex(
+            "(?i)\\b(?:card|mada|visa|mastercard|google pay|apple pay)" +
+                "[^0-9\\n]{0,20}[*xX#]*([0-9]{2,6})"
+        ),
+        Regex("(?i)\\*{2,}[ \\t]*([0-9]{3,6})[^\\n]{0,12}\\b(?:mada|visa|mastercard)\\b"),
+        Regex("(?i)\\b(?:by|via)\\s*:?\\s*\\*{2,}[ \\t]*([0-9]{3,6})")
     )
     private val accountPattern = Regex(
         "(?i)\\b(?:from|to|account|a/c|acct)[^0-9\\n]{0,20}[*xX#]*([0-9]{2,6})"
@@ -60,7 +65,12 @@ object TransactionParser {
     private val maskedPattern = Regex("(?i)\\*{2,}[ \\t]*([0-9]{3,6})")
     private val parenthesisedPattern = Regex("\\(\\s*([0-9]{3,6})\\s*\\)")
     private val cardContext = Regex(
-        "(?i)\\b(pos|purchase|online purchase|card|mada|google pay|apple pay|used at)\\b"
+        "(?i)\\b(pos|purchase|online purchase|card|mada|visa|mastercard|" +
+            "google pay|apple pay|used at)\\b"
+    )
+    private val accountContext = Regex(
+        "(?i)\\b(transfer|funds transfer|bill payment|sadad|sarie|standing order|" +
+            "direct debit|cheque|salary)\\b"
     )
 
     fun parse(message: RawSms, defaultCurrency: String = "EGP"): ParsedTransaction? {
@@ -84,26 +94,45 @@ object TransactionParser {
         body: String,
         sender: String
     ): Pair<String, TransactionChannel> {
-        val cardDigits = cardPattern.find(body)?.groupValues?.get(1)?.trim()
-        if (!cardDigits.isNullOrEmpty()) {
-            return "$sender $cardDigits" to TransactionChannel.CARD
-        }
+        val cardDigits = firstGroup(cardPatterns, body)
         val accountDigits = accountPattern.find(body)?.groupValues?.get(1)?.trim()
-        if (!accountDigits.isNullOrEmpty()) {
-            return "$sender $accountDigits" to TransactionChannel.ACCOUNT
+        val accountFirst = accountContext.containsMatchIn(body)
+
+        if (accountFirst) {
+            if (!accountDigits.isNullOrEmpty()) {
+                return "$sender $accountDigits" to TransactionChannel.ACCOUNT
+            }
+            if (!cardDigits.isNullOrEmpty()) {
+                return "$sender $cardDigits" to TransactionChannel.CARD
+            }
+        } else {
+            if (!cardDigits.isNullOrEmpty()) {
+                return "$sender $cardDigits" to TransactionChannel.CARD
+            }
+            if (!accountDigits.isNullOrEmpty()) {
+                return "$sender $accountDigits" to TransactionChannel.ACCOUNT
+            }
         }
         val masked = maskedPattern.find(body)?.groupValues?.get(1)?.trim()
         if (!masked.isNullOrEmpty()) {
-            val card = cardContext.containsMatchIn(body)
+            val card = !accountFirst && cardContext.containsMatchIn(body)
             return "$sender $masked" to if (card) TransactionChannel.CARD else TransactionChannel.ACCOUNT
         }
         val parenthesised = parenthesisedPattern.find(body)?.groupValues?.get(1)?.trim()
         if (!parenthesised.isNullOrEmpty()) {
-            val card = cardContext.containsMatchIn(body)
+            val card = !accountFirst && cardContext.containsMatchIn(body)
             return "$sender $parenthesised" to
                 if (card) TransactionChannel.CARD else TransactionChannel.ACCOUNT
         }
         return sender to TransactionChannel.OTHER
+    }
+
+    private fun firstGroup(patterns: List<Regex>, body: String): String? {
+        for (pattern in patterns) {
+            val digits = pattern.find(body)?.groupValues?.get(1)?.trim()
+            if (!digits.isNullOrEmpty()) return digits
+        }
+        return null
     }
 
     private fun extractAmount(body: String, defaultCurrency: String): Pair<Long, String>? {

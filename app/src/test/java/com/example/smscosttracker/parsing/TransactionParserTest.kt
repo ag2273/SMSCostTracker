@@ -158,12 +158,14 @@ class TransactionParserTest {
     fun `extracts masked card from online purchase`() {
         val parsed = TransactionParser.parse(
             message(
-                "Online Purchase\nBy: ***1214;mada\nfor SAR 181.00 on 2026-09-10 20:22:00"
+                "Online Purchase\nBy: ***1214;mada\nFrom: ***001\n" +
+                    "Amount: SAR 64.66\nAt: Hungerstation×Riya\nDate: 2026-09-03 12:18:41"
             )
         )!!
 
         assertEquals("BANK 1214", parsed.account)
         assertEquals(TransactionChannel.CARD, parsed.channel)
+        assertEquals("Hungerstation×Riya", parsed.merchant)
     }
 
     @Test
