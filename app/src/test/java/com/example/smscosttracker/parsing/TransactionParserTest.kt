@@ -324,6 +324,28 @@ class TransactionParserTest {
     }
 
     @Test
+    fun `parses dual currency purchase using the settled SAR amount`() {
+        val parsed = TransactionParser.parse(
+            message(
+                "Online Purchase\n" +
+                    "SAB Mastercard Premier Credit Card (0542) was\n" +
+                    "used at CLOUDFLARE for USD 10.46 in UNITED\n" +
+                    "STATES\n" +
+                    "Exchange rate: 3.75430\n" +
+                    "Amount in SAR: 39.27\n" +
+                    "International Fees in SAR: 0.90\n" +
+                    "Total amount in SAR: 40.17\n" +
+                    "Date: 2026-10-19 20:33:25\n" +
+                    "Balance: SAR 51687.06"
+            )
+        )!!
+
+        assertEquals(3927L, parsed.amountMinor)
+        assertEquals("SAR", parsed.currency)
+        assertEquals("CLOUDFLARE", parsed.merchant)
+    }
+
+    @Test
     fun `ignores statement amount due messages`() {
         assertNull(
             TransactionParser.parse(

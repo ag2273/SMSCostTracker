@@ -43,6 +43,12 @@ class OnboardingPreferences(context: Context) {
                 .apply()
         }
 
+    var parserVersion: Int
+        get() = prefs.getInt(KEY_PARSER_VERSION, 0)
+        set(value) {
+            prefs.edit().putInt(KEY_PARSER_VERSION, value).apply()
+        }
+
     fun markComplete(stage: OnboardingStage = OnboardingStage.COMPLETE) {
         prefs.edit()
             .putBoolean(KEY_COMPLETE, true)
@@ -58,5 +64,6 @@ class OnboardingPreferences(context: Context) {
         const val KEY_STAGE = "stage"
         const val KEY_COMPLETE = "complete"
         const val KEY_THREADS = "thread_ids"
+        const val KEY_PARSER_VERSION = "parser_version"
     }
 }

@@ -6,23 +6,33 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import com.example.smscosttracker.analysis.ActivityFilterState
 import com.example.smscosttracker.analysis.HomeFilterState
 import com.example.smscosttracker.data.AppDatabase
 import com.example.smscosttracker.data.OnboardingPreferences
 import com.example.smscosttracker.data.TransactionImporter
 import com.example.smscosttracker.data.TransactionRepository
+import com.example.smscosttracker.parsing.TransactionParser
 import com.example.smscosttracker.ui.CrashReportScreen
 import com.example.smscosttracker.ui.components.LedgerBottomBar
 import com.example.smscosttracker.ui.onboarding.OnboardingFlow
@@ -37,6 +47,8 @@ import com.example.smscosttracker.ui.screens.SettingsScreen
 import com.example.smscosttracker.ui.screens.UnparsedMessagesScreen
 import com.example.smscosttracker.ui.theme.Ledger
 import com.example.smscosttracker.ui.theme.SmsCostTrackerTheme
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -76,20 +88,37 @@ class MainActivity : ComponentActivity() {
                 val importer = remember { TransactionImporter(database) }
                 val preferences = remember { OnboardingPreferences(context) }
                 var showOnboarding by remember { mutableStateOf(!preferences.complete) }
+                var rebuilding by remember { mutableStateOf(false) }
                 var refreshKey by remember { mutableStateOf(0) }
 
-                if (showOnboarding) {
-                    OnboardingFlow(
+                LaunchedEffect(Unit) {
+                    val needsRebuild = preferences.complete &&
+                        preferences.parserVersion < TransactionParser.PARSER_VERSION
+                    if (needsRebuild) {
+                        rebuilding = true
+                        runCatching {
+                            withContext(Dispatchers.IO) { importer.rebuildFromStored() }
+                        }.onSuccess {
+                            preferences.parserVersion = TransactionParser.PARSER_VERSION
+                            refreshKey++
+                        }
+                        rebuilding = false
+                    }
+                }
+
+                when {
+                    showOnboarding -> OnboardingFlow(
                         repository = repository,
                         importer = importer,
                         preferences = preferences,
                         onFinished = {
+                            preferences.parserVersion = TransactionParser.PARSER_VERSION
                             showOnboarding = false
                             refreshKey++
                         }
                     )
-                } else {
-                    MainShell(
+                    rebuilding -> UpdatingTransactionsScreen()
+                    else -> MainShell(
                         repository = repository,
                         importer = importer,
                         preferences = preferences,
@@ -102,6 +131,21 @@ class MainActivity : ComponentActivity() {
                     )
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun UpdatingTransactionsScreen() {
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            CircularProgressIndicator(color = Ledger.Primary)
+            Spacer(Modifier.height(12.dp))
+            Text(
+                "Updating parsed transactions…",
+                style = MaterialTheme.typography.bodyMedium,
+                color = Ledger.Muted
+            )
         }
     }
 }

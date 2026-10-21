@@ -18,13 +18,19 @@ sealed interface ParseOutcome {
 }
 
 object TransactionParser {
-    private const val UNKNOWN_MERCHANT = "Unknown"
+    const val PARSER_VERSION = 2
 
+    private const val UNKNOWN_MERCHANT = "Unknown"
+    private const val CURRENCY_SEPARATOR = "[\\s\\u00A0\\u2007\\u202F:=]*"
+
+    private val bidiControls = Regex("[\u200B\u200E\u200F\u202A-\u202E\u2066-\u2069]")
     private val currencyFirst = Regex(
-        "(?i)(EGP|SAR|AED|USD|ريال|جنيه|درهم)[\\s:=]*([0-9][0-9,]*(?:\\.[0-9]{1,2})?)"
+        "(?i)(EGP|SAR|AED|USD|ريال|جنيه|درهم)$CURRENCY_SEPARATOR" +
+            "([0-9][0-9,]*(?:\\.[0-9]{1,2})?)"
     )
     private val currencyLast = Regex(
-        "(?i)([0-9][0-9,]*(?:\\.[0-9]{1,2})?)[\\s:=]*(EGP|SAR|AED|USD|ريال|جنيه|درهم)"
+        "(?i)([0-9][0-9,]*(?:\\.[0-9]{1,2})?)$CURRENCY_SEPARATOR" +
+            "(EGP|SAR|AED|USD|ريال|جنيه|درهم)"
     )
     private val plainAmount = Regex(
         "(?i)(?:amount|debit(?:ed)?|paid|payment|purchase|withdrawal|deducted|spent|charged)" +
@@ -116,7 +122,7 @@ object TransactionParser {
         defaultCurrency: String = "EGP",
         instruments: Map<String, TransactionChannel> = emptyMap()
     ): ParseOutcome {
-        val body = message.body
+        val body = bidiControls.replace(message.body, "")
         if (nonTransaction.containsMatchIn(body)) {
             return ParseOutcome.Skipped("Not a spending message")
         }
@@ -145,7 +151,8 @@ object TransactionParser {
 
     fun instrumentKey(address: String, digits: String): String = "$address|$digits"
 
-    fun candidates(body: String): List<InstrumentCandidate> {
+    fun candidates(rawBody: String): List<InstrumentCandidate> {
+        val body = bidiControls.replace(rawBody, "")
         val found = LinkedHashMap<String, Pair<TransactionChannel, Int>>()
         fun add(
             digits: String?,
