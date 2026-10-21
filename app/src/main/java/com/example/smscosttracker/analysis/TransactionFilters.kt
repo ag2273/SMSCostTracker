@@ -5,6 +5,10 @@ import com.example.smscosttracker.data.TransactionEntity
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
+
+private val LABEL_DATE_FORMAT = DateTimeFormatter.ofPattern("d MMM yyyy", Locale.ENGLISH)
 
 enum class DatePreset(val label: String) {
     ALL("All time"),
@@ -26,6 +30,14 @@ data class TransactionFilterState(
 )
 
 object TransactionFilters {
+    fun labelFor(state: TransactionFilterState): String {
+        val start = state.customStart
+        if (state.preset != DatePreset.CUSTOM || start == null) return state.preset.label
+        val startLabel = start.format(LABEL_DATE_FORMAT)
+        return state.customEnd?.let { "$startLabel – ${it.format(LABEL_DATE_FORMAT)}" }
+            ?: "From $startLabel"
+    }
+
     fun apply(
         transactions: List<TransactionEntity>,
         state: TransactionFilterState,

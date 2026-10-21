@@ -199,4 +199,23 @@ class TransactionFiltersTest {
         assertEquals("EGP", result.single().currency)
     }
 
+    @Test
+    fun `custom range label includes both dates and years`() {
+        val state = TransactionFilterState(
+            preset = DatePreset.CUSTOM,
+            customStart = LocalDate.of(2025, 12, 30),
+            customEnd = LocalDate.of(2026, 1, 5)
+        )
+
+        assertEquals("30 Dec 2025 – 5 Jan 2026", TransactionFilters.labelFor(state))
+    }
+
+    @Test
+    fun `preset label is used when no custom start is set`() {
+        assertEquals(
+            DatePreset.THIS_QUARTER.label,
+            TransactionFilters.labelFor(TransactionFilterState(preset = DatePreset.THIS_QUARTER))
+        )
+    }
+
 }

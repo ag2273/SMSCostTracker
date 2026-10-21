@@ -20,15 +20,20 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -65,10 +70,14 @@ import com.example.smscosttracker.ui.components.channelLabel
 import com.example.smscosttracker.ui.components.formatMoney
 import com.example.smscosttracker.ui.theme.Ledger
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
+import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.concurrent.thread
+
+private val CUSTOM_DATE_FORMAT = DateTimeFormatter.ofPattern("d MMM yyyy", Locale.ENGLISH)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -84,6 +93,16 @@ fun FiltersSheet(
     val previewCount = remember(draft, allTransactions) {
         TransactionFilters.apply(allTransactions, draft).size
     }
+    val customStart = draft.customStart
+    val customEnd = draft.customEnd
+    val customRangeError = when {
+        draft.preset != DatePreset.CUSTOM -> null
+        customStart == null -> "Choose a start date for the custom range."
+        customEnd != null && customEnd.isBefore(customStart) ->
+            "End date must be on or after the start date."
+        else -> null
+    }
+    val customRangeValid = customRangeError == null
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -113,15 +132,41 @@ fun FiltersSheet(
                     .padding(top = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(7.dp)
             ) {
-                DatePreset.entries
-                    .filter { it != DatePreset.CUSTOM }
-                    .forEach { preset ->
-                        LedgerChip(
-                            text = preset.label,
-                            selected = draft.preset == preset,
-                            onClick = { draft = draft.copy(preset = preset) }
-                        )
-                    }
+                DatePreset.entries.forEach { preset ->
+                    LedgerChip(
+                        text = preset.label,
+                        selected = draft.preset == preset,
+                        onClick = {
+                            draft = if (preset == DatePreset.CUSTOM && draft.customStart == null) {
+                                val today = LocalDate.now()
+                                draft.copy(
+                                    preset = preset,
+                                    customStart = today.withDayOfMonth(1),
+                                    customEnd = today
+                                )
+                            } else {
+                                draft.copy(preset = preset)
+                            }
+                        }
+                    )
+                }
+            }
+            if (draft.preset == DatePreset.CUSTOM) {
+                Spacer(Modifier.height(12.dp))
+                CustomRangeFields(
+                    start = draft.customStart,
+                    end = draft.customEnd,
+                    onStartChange = { draft = draft.copy(customStart = it) },
+                    onEndChange = { draft = draft.copy(customEnd = it) }
+                )
+                customRangeError?.let { error ->
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        error,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Ledger.Danger
+                    )
+                }
             }
             Spacer(Modifier.height(18.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -169,9 +214,13 @@ fun FiltersSheet(
             Spacer(Modifier.height(22.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    "$previewCount matching transactions",
+                    if (customRangeValid) {
+                        "$previewCount matching transactions"
+                    } else {
+                        "Choose a valid custom range"
+                    },
                     style = MaterialTheme.typography.labelMedium,
-                    color = Ledger.Muted,
+                    color = if (customRangeValid) Ledger.Muted else Ledger.Danger,
                     modifier = Modifier.weight(1f)
                 )
                 LedgerTextButton(
@@ -185,10 +234,144 @@ fun FiltersSheet(
                 )
             }
             Spacer(Modifier.height(8.dp))
-            PrimaryButton("Show $previewCount transactions", { onApply(draft) })
+            PrimaryButton(
+                text = if (customRangeValid) {
+                    "Show $previewCount transactions"
+                } else {
+                    "Choose a valid date range"
+                },
+                onClick = { onApply(draft) },
+                enabled = customRangeValid
+            )
         }
     }
 }
+
+@Composable
+private fun CustomRangeFields(
+    start: LocalDate?,
+    end: LocalDate?,
+    onStartChange: (LocalDate?) -> Unit,
+    onEndChange: (LocalDate?) -> Unit
+) {
+    var picking by remember { mutableStateOf<DateTarget?>(null) }
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        DateField(
+            label = "From",
+            date = start,
+            modifier = Modifier.weight(1f),
+            onClick = { picking = DateTarget.START }
+        )
+        DateField(
+            label = "To",
+            date = end,
+            modifier = Modifier.weight(1f),
+            onClick = { picking = DateTarget.END }
+        )
+    }
+    if (start != null || end != null) {
+        LedgerTextButton(
+            text = "Clear custom dates",
+            onClick = {
+                onStartChange(null)
+                onEndChange(null)
+            }
+        )
+    }
+
+    val target = picking
+    if (target != null) {
+        val isStart = target == DateTarget.START
+        DatePickerModal(
+            initial = if (isStart) start else end ?: start,
+            onDismiss = { picking = null },
+            onSelect = {
+                if (isStart) onStartChange(it) else onEndChange(it)
+                picking = null
+            }
+        )
+    }
+}
+
+private enum class DateTarget { START, END }
+
+@Composable
+private fun DateField(
+    label: String,
+    date: LocalDate?,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = modifier.clickable(onClick = onClick),
+        shape = RoundedCornerShape(12.dp),
+        color = Ledger.Surface,
+        border = BorderStroke(1.dp, Ledger.Outline)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Icon(
+                Icons.Outlined.CalendarMonth,
+                contentDescription = null,
+                tint = Ledger.Muted,
+                modifier = Modifier.size(16.dp)
+            )
+            Column {
+                Text(label, style = MaterialTheme.typography.labelSmall, color = Ledger.Muted)
+                Text(
+                    date?.format(CUSTOM_DATE_FORMAT) ?: "Select date",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = if (date == null) Ledger.Muted else Ledger.Ink
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DatePickerModal(
+    initial: LocalDate?,
+    onDismiss: () -> Unit,
+    onSelect: (LocalDate) -> Unit
+) {
+    val state = rememberDatePickerState(
+        initialSelectedDateMillis = initial?.toPickerMillis()
+    )
+    DatePickerDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    state.selectedDateMillis?.let { onSelect(it.toPickerDate()) }
+                        ?: onDismiss()
+                }
+            ) {
+                Text("Select")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    ) {
+        DatePicker(state = state)
+    }
+}
+
+private fun LocalDate.toPickerMillis(): Long =
+    atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+
+private fun Long.toPickerDate(): LocalDate =
+    Instant.ofEpochMilli(this).atZone(ZoneOffset.UTC).toLocalDate()
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

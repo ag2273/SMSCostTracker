@@ -125,7 +125,10 @@ fun ActivityScreen(
 
     ScreenBackground {
         Column(modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 14.dp)) {
-            PageHeader("Activity", "${filtered.size} transactions · ${filter.preset.label}")
+            PageHeader(
+                "Activity",
+                "${filtered.size} transactions · ${TransactionFilters.labelFor(filter)}"
+            )
             Spacer(Modifier.height(14.dp))
             LedgerTextField(
                 value = filter.merchantQuery,
@@ -140,7 +143,7 @@ fun ActivityScreen(
                 horizontalArrangement = Arrangement.spacedBy(7.dp)
             ) {
                 LedgerChip(
-                    text = filter.preset.label,
+                    text = TransactionFilters.labelFor(filter),
                     selected = true,
                     onClick = { showFilters = true }
                 )

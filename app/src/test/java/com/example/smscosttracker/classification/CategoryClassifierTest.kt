@@ -22,6 +22,16 @@ class CategoryClassifierTest {
     }
 
     @Test
+    fun `classifies an arabic grocery merchant`() {
+        assertEquals(Category.GROCERIES, classifier.classify("كارفور"))
+    }
+
+    @Test
+    fun `classifies a saudi fuel merchant`() {
+        assertEquals(Category.FUEL, classifier.classify("محطة وقود"))
+    }
+
+    @Test
     fun `classifies an unknown merchant as other`() {
         assertEquals(Category.OTHER, classifier.classify("Zzxq Wibble"))
     }
