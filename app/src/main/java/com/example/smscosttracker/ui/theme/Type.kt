@@ -19,89 +19,89 @@ val LedgerTypography = Typography(
     displayLarge = TextStyle(
         fontFamily = PlexSans,
         fontWeight = FontWeight.Bold,
-        fontSize = 42.sp,
-        lineHeight = 46.sp,
+        fontSize = 44.sp,
+        lineHeight = 48.sp,
         letterSpacing = (-1.1).sp
     ),
     displayMedium = TextStyle(
         fontFamily = PlexSans,
         fontWeight = FontWeight.Bold,
-        fontSize = 36.sp,
-        lineHeight = 40.sp,
+        fontSize = 38.sp,
+        lineHeight = 42.sp,
         letterSpacing = (-0.8).sp
     ),
     headlineLarge = TextStyle(
         fontFamily = PlexSans,
         fontWeight = FontWeight.Bold,
-        fontSize = 30.sp,
-        lineHeight = 34.sp,
+        fontSize = 32.sp,
+        lineHeight = 36.sp,
         letterSpacing = (-0.5).sp
     ),
     headlineMedium = TextStyle(
         fontFamily = PlexSans,
         fontWeight = FontWeight.SemiBold,
-        fontSize = 25.sp,
-        lineHeight = 30.sp,
+        fontSize = 27.sp,
+        lineHeight = 32.sp,
         letterSpacing = (-0.3).sp
     ),
     headlineSmall = TextStyle(
         fontFamily = PlexSans,
         fontWeight = FontWeight.SemiBold,
-        fontSize = 22.sp,
-        lineHeight = 27.sp
+        fontSize = 24.sp,
+        lineHeight = 29.sp
     ),
     titleLarge = TextStyle(
         fontFamily = PlexSans,
         fontWeight = FontWeight.SemiBold,
-        fontSize = 19.sp,
-        lineHeight = 24.sp
+        fontSize = 20.sp,
+        lineHeight = 25.sp
     ),
     titleMedium = TextStyle(
         fontFamily = PlexSans,
         fontWeight = FontWeight.SemiBold,
-        fontSize = 17.sp,
-        lineHeight = 22.sp
+        fontSize = 18.sp,
+        lineHeight = 23.sp
     ),
     titleSmall = TextStyle(
         fontFamily = PlexSans,
         fontWeight = FontWeight.SemiBold,
-        fontSize = 15.sp,
-        lineHeight = 20.sp
+        fontSize = 16.sp,
+        lineHeight = 21.sp
     ),
     bodyLarge = TextStyle(
+        fontFamily = PlexSans,
+        fontWeight = FontWeight.Normal,
+        fontSize = 17.sp,
+        lineHeight = 24.sp
+    ),
+    bodyMedium = TextStyle(
         fontFamily = PlexSans,
         fontWeight = FontWeight.Normal,
         fontSize = 16.sp,
         lineHeight = 23.sp
     ),
-    bodyMedium = TextStyle(
-        fontFamily = PlexSans,
-        fontWeight = FontWeight.Normal,
-        fontSize = 15.sp,
-        lineHeight = 21.sp
-    ),
     bodySmall = TextStyle(
         fontFamily = PlexSans,
         fontWeight = FontWeight.Normal,
-        fontSize = 13.sp,
-        lineHeight = 18.sp
+        fontSize = 14.sp,
+        lineHeight = 20.sp
     ),
     labelLarge = TextStyle(
         fontFamily = PlexSans,
         fontWeight = FontWeight.SemiBold,
-        fontSize = 15.sp,
-        lineHeight = 19.sp
+        fontSize = 16.sp,
+        lineHeight = 20.sp
     ),
     labelMedium = TextStyle(
         fontFamily = PlexSans,
         fontWeight = FontWeight.Medium,
-        fontSize = 13.sp,
-        lineHeight = 17.sp
+        fontSize = 14.sp,
+        lineHeight = 19.sp
     ),
     labelSmall = TextStyle(
         fontFamily = PlexSans,
         fontWeight = FontWeight.Medium,
-        fontSize = 12.sp,
-        lineHeight = 15.sp
+        fontSize = 13.sp,
+        lineHeight = 17.sp
     )
 )

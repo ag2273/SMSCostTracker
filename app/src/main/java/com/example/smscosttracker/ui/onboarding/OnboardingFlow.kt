@@ -10,6 +10,7 @@ import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -22,20 +23,32 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AccountBalance
+import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.Chat
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.CreditCard
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Shield
+import androidx.compose.material.icons.outlined.Smartphone
 import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
@@ -55,10 +68,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
@@ -79,6 +95,7 @@ import com.example.smscosttracker.ui.components.ChannelIcon
 import com.example.smscosttracker.ui.components.LedgerCard
 import com.example.smscosttracker.ui.components.LedgerChip
 import com.example.smscosttracker.ui.components.LedgerDivider
+import com.example.smscosttracker.ui.components.LedgerTextField
 import com.example.smscosttracker.ui.components.LedgerTextButton
 import com.example.smscosttracker.ui.components.PageHeader
 import com.example.smscosttracker.ui.components.Pill
@@ -172,6 +189,7 @@ fun OnboardingFlow(
 
         OnboardingStage.PERMISSION -> PermissionScreen(
             granted = permissionGranted,
+            onBack = { go(OnboardingStage.WELCOME) },
             onRequest = { permissionLauncher.launch(Manifest.permission.READ_SMS) },
             onContinue = { go(OnboardingStage.THREADS) },
             onSkip = {
@@ -282,26 +300,245 @@ private fun OnboardingPage(
             modifier = modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 22.dp, vertical = 18.dp),
+                .padding(horizontal = 20.dp)
+                .padding(top = 8.dp, bottom = 16.dp)
+                .navigationBarsPadding(),
             content = content
         )
     }
 }
 
 @Composable
-private fun WelcomeScreen(onStart: () -> Unit) {
-    OnboardingPage {
-        Spacer(Modifier.height(18.dp))
-        Surface(
-            modifier = Modifier.size(44.dp),
-            shape = CircleShape,
-            color = Ledger.Primary
+private fun OnboardingHeader(
+    title: String,
+    subtitle: String,
+    onBack: (() -> Unit)? = null,
+    badge: (@Composable () -> Unit)? = null
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.Top
+    ) {
+        if (onBack != null) {
+            Surface(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable(onClick = onBack),
+                shape = RoundedCornerShape(12.dp),
+                color = Ledger.Surface,
+                border = BorderStroke(1.dp, Ledger.Outline)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        Icons.Outlined.ArrowBack,
+                        contentDescription = "Back",
+                        tint = Ledger.Ink,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+            Spacer(Modifier.width(12.dp))
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.headlineSmall, color = Ledger.Ink)
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = Ledger.Muted,
+                modifier = Modifier.padding(top = 2.dp)
+            )
+        }
+        if (badge != null) {
+            Spacer(Modifier.width(10.dp))
+            Box(modifier = Modifier.padding(top = 2.dp)) { badge() }
+        }
+    }
+}
+
+@Composable
+private fun StepProgress(current: Int, total: Int = 4) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(5.dp)
+    ) {
+        repeat(total) { index ->
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(4.dp)
+                    .clip(CircleShape)
+                    .background(if (index < current) Ledger.Primary else Ledger.Outline)
+            )
+        }
+    }
+}
+
+@Composable
+private fun HeroPanel(
+    height: Dp,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth().height(height),
+        shape = RoundedCornerShape(24.dp),
+        color = Ledger.Surface,
+        border = BorderStroke(1.dp, Ledger.Outline)
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Box(
+                modifier = Modifier
+                    .size(height * 0.82f)
+                    .clip(CircleShape)
+                    .background(Ledger.Primary.copy(alpha = 0.07f))
+            )
+            Box(
+                modifier = Modifier
+                    .size(height * 0.54f)
+                    .clip(CircleShape)
+                    .background(Ledger.Accent.copy(alpha = 0.08f))
+            )
+            content()
+        }
+    }
+}
+
+@Composable
+private fun NoticeBanner(
+    title: String,
+    body: String,
+    icon: ImageVector = Icons.Outlined.Info,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        color = Ledger.AccentSoft,
+        border = BorderStroke(1.dp, Ledger.Accent.copy(alpha = 0.25f))
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 11.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(9.dp),
+            verticalAlignment = Alignment.Top
         ) {
-            Box(contentAlignment = Alignment.Center) {
-                Text("S", color = Ledger.OnPrimary, fontWeight = FontWeight.Bold)
+            Box(
+                modifier = Modifier
+                    .size(24.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Ledger.Accent),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    icon,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(15.dp)
+                )
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.titleSmall, color = Ledger.Ink)
+                Text(
+                    body,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Ledger.Muted,
+                    modifier = Modifier.padding(top = 1.dp)
+                )
             }
         }
-        Spacer(Modifier.height(26.dp))
+    }
+}
+
+@Composable
+private fun BrandCheckbox(checked: Boolean, onToggle: () -> Unit) {
+    Surface(
+        modifier = Modifier
+            .size(24.dp)
+            .clip(RoundedCornerShape(7.dp))
+            .clickable(onClick = onToggle),
+        shape = RoundedCornerShape(7.dp),
+        color = if (checked) Ledger.Primary else Ledger.Surface,
+        border = BorderStroke(1.5.dp, if (checked) Ledger.Primary else Ledger.Outline)
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            if (checked) {
+                Icon(
+                    Icons.Outlined.Check,
+                    contentDescription = "Selected",
+                    tint = Ledger.OnPrimary,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun WelcomeScreen(onStart: () -> Unit) {
+    val context = LocalContext.current
+    val version = remember {
+        runCatching {
+            context.packageManager.getPackageInfo(context.packageName, 0).versionName
+        }.getOrNull()
+    }
+    OnboardingPage {
+        Spacer(Modifier.height(8.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                modifier = Modifier.size(34.dp),
+                shape = RoundedCornerShape(11.dp),
+                color = Ledger.Primary
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text(
+                        "S",
+                        color = Ledger.OnPrimary,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+            Spacer(Modifier.width(10.dp))
+            Text(
+                "SMSCostTracker",
+                style = MaterialTheme.typography.titleSmall,
+                color = Ledger.Ink,
+                modifier = Modifier.weight(1f)
+            )
+            Pill("v${version ?: "0.2"}")
+        }
+        Spacer(Modifier.height(16.dp))
+        HeroPanel(210.dp) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    Icons.Outlined.Smartphone,
+                    contentDescription = null,
+                    tint = Ledger.Primary,
+                    modifier = Modifier.size(84.dp)
+                )
+                Surface(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .offset(x = 12.dp, y = 8.dp)
+                        .size(44.dp),
+                    shape = CircleShape,
+                    color = Ledger.Accent
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            Icons.Outlined.Add,
+                            contentDescription = null,
+                            tint = Ledger.OnPrimary,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(22.dp))
         Text(
             "Your spending,\nfrom your SMS.",
             style = MaterialTheme.typography.displayLarge,
@@ -311,27 +548,36 @@ private fun WelcomeScreen(onStart: () -> Unit) {
             "Turn bank messages into clear transactions and charts. Parsing happens entirely on this phone.",
             style = MaterialTheme.typography.bodyLarge,
             color = Ledger.Muted,
-            modifier = Modifier.padding(top = 12.dp)
+            modifier = Modifier.padding(top = 10.dp)
         )
-        Spacer(Modifier.height(26.dp))
-        LedgerCard(modifier = Modifier.padding(bottom = 18.dp)) {
-            Column(
-                modifier = Modifier.padding(18.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
-            ) {
-                PrivacyPoint(Icons.Outlined.Lock, "On-device only", "SMS is read and parsed locally. Nothing is uploaded.")
-                PrivacyPoint(Icons.Outlined.AccountBalance, "No bank login", "We never ask for a password, PIN or account access.")
-                PrivacyPoint(Icons.Outlined.Check, "You stay in control", "Choose the threads to scan and undo corrections anytime.")
-            }
+        Spacer(Modifier.height(22.dp))
+        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            PrivacyPoint(
+                Icons.Outlined.Shield,
+                "On-device only",
+                "No server, no account, no SMS upload."
+            )
+            PrivacyPoint(
+                Icons.Outlined.AccountBalance,
+                "No bank login",
+                "We read only the bank threads you pick."
+            )
+            PrivacyPoint(
+                Icons.Outlined.Lock,
+                "You stay in control",
+                "Review every card and account before import."
+            )
         }
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(28.dp))
         PrimaryButton("Get started", onStart)
         Text(
-            "By continuing you agree to keep your device secure. You can revoke SMS access in Android Settings.",
+            "By continuing you agree to read only the threads you select. You can revoke SMS access in Android Settings at any time.",
             style = MaterialTheme.typography.labelSmall,
             color = Ledger.Muted,
             textAlign = TextAlign.Center,
-            modifier = Modifier.padding(top = 10.dp, start = 10.dp, end = 10.dp)
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 10.dp, start = 8.dp, end = 8.dp)
         )
         Spacer(Modifier.height(14.dp))
     }
@@ -339,18 +585,23 @@ private fun WelcomeScreen(onStart: () -> Unit) {
 
 @Composable
 private fun PrivacyPoint(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: ImageVector,
     title: String,
     body: String
 ) {
     Row(horizontalArrangement = Arrangement.spacedBy(11.dp)) {
         Surface(
-            modifier = Modifier.size(34.dp),
-            shape = CircleShape,
-            color = Ledger.SurfaceSoft
+            modifier = Modifier.size(32.dp),
+            shape = RoundedCornerShape(10.dp),
+            color = Ledger.Primary.copy(alpha = 0.10f)
         ) {
             Box(contentAlignment = Alignment.Center) {
-                Icon(icon, contentDescription = null, tint = Ledger.Primary, modifier = Modifier.size(17.dp))
+                Icon(
+                    icon,
+                    contentDescription = null,
+                    tint = Ledger.Primary,
+                    modifier = Modifier.size(17.dp)
+                )
             }
         }
         Column(modifier = Modifier.weight(1f)) {
@@ -363,73 +614,105 @@ private fun PrivacyPoint(
 @Composable
 private fun PermissionScreen(
     granted: Boolean,
+    onBack: () -> Unit,
     onRequest: () -> Unit,
     onContinue: () -> Unit,
     onSkip: () -> Unit,
     onOpenSettings: () -> Unit
 ) {
     OnboardingPage {
-        Spacer(Modifier.height(20.dp))
-        PageHeader("Allow SMS access", "Step 2 of 7")
-        Spacer(Modifier.height(34.dp))
-        Surface(
-            modifier = Modifier.size(92.dp).align(Alignment.CenterHorizontally),
-            shape = CircleShape,
-            color = Ledger.SurfaceSoft
-        ) {
+        OnboardingHeader(
+            title = "Allow SMS access",
+            subtitle = "Step 1 of 4 · Permission",
+            onBack = onBack,
+            badge = { Pill("Required", PillTone.Primary) }
+        )
+        Spacer(Modifier.height(12.dp))
+        StepProgress(current = 1)
+        Spacer(Modifier.height(14.dp))
+        HeroPanel(210.dp) {
             Box(contentAlignment = Alignment.Center) {
                 Icon(
-                    Icons.Outlined.Lock,
+                    Icons.Outlined.Chat,
                     contentDescription = null,
                     tint = Ledger.Primary,
-                    modifier = Modifier.size(38.dp)
+                    modifier = Modifier.size(82.dp)
                 )
+                Surface(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .offset(x = 10.dp, y = 6.dp)
+                        .size(46.dp),
+                    shape = CircleShape,
+                    color = Ledger.Primary
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            Icons.Outlined.Check,
+                            contentDescription = null,
+                            tint = Ledger.OnPrimary,
+                            modifier = Modifier.size(26.dp)
+                        )
+                    }
+                }
             }
         }
         Text(
             "We need to read bank messages to build your transactions.",
             style = MaterialTheme.typography.headlineMedium,
             color = Ledger.Ink,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(top = 26.dp)
+            modifier = Modifier.padding(top = 20.dp)
         )
         Text(
-            "Only the threads you select are imported. Messages are parsed on this phone and are never uploaded.",
+            "Android will show a system prompt. SMSCostTracker only reads the conversations you select in the next step.",
             style = MaterialTheme.typography.bodyMedium,
             color = Ledger.Muted,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(top = 10.dp, start = 12.dp, end = 12.dp)
+            modifier = Modifier.padding(top = 8.dp)
         )
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(16.dp))
         LedgerCard {
-            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                PrivacyPoint(Icons.Outlined.Check, "Read SMS", "Bank and payment messages only, from the threads you choose.")
-                PrivacyPoint(Icons.Outlined.Lock, "No internet required", "Parsing works offline. No message text leaves the device.")
-                PrivacyPoint(Icons.Outlined.AccountBalance, "Revoke anytime", "You can change access in Android Settings later.")
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(13.dp)
+            ) {
+                PrivacyPoint(
+                    Icons.Outlined.Chat,
+                    "Read SMS",
+                    "Needed to find purchase, transfer and bill messages."
+                )
+                PrivacyPoint(
+                    Icons.Outlined.Shield,
+                    "No internet required",
+                    "Parsing and classification run locally."
+                )
+                PrivacyPoint(
+                    Icons.Outlined.Settings,
+                    "Revoke anytime",
+                    "Android Settings → Apps → Permissions."
+                )
             }
         }
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(20.dp))
         if (granted) {
             PrimaryButton("Continue", onContinue)
         } else {
             PrimaryButton("Allow SMS access", onRequest)
-            LedgerTextButton(
-                text = "Open app settings",
-                onClick = onOpenSettings,
-                modifier = Modifier.align(Alignment.CenterHorizontally)
-            )
-            LedgerTextButton(
-                text = "Continue without SMS",
-                onClick = onSkip,
-                modifier = Modifier.align(Alignment.CenterHorizontally)
-            )
+            Spacer(Modifier.height(8.dp))
+            SecondaryButton("Not now", onSkip)
+            if (!granted) {
+                LedgerTextButton(
+                    text = "Open app settings",
+                    onClick = onOpenSettings,
+                    modifier = Modifier.align(Alignment.CenterHorizontally)
+                )
+            }
         }
         Text(
-            "You can continue without access, but there will be no transactions to review.",
+            "We never send SMS or share message text.",
             style = MaterialTheme.typography.labelSmall,
             color = Ledger.Muted,
             textAlign = TextAlign.Center,
-            modifier = Modifier.padding(top = 8.dp)
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
         )
         Spacer(Modifier.height(10.dp))
     }
@@ -447,6 +730,7 @@ private fun ThreadsScreen(
     val context = LocalContext.current
     var threads by remember { mutableStateOf<List<SmsThread>>(emptyList()) }
     var selected by remember { mutableStateOf(selectedFromPrefs) }
+    var search by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(granted) }
     var error by remember { mutableStateOf<String?>(null) }
 
@@ -475,13 +759,20 @@ private fun ThreadsScreen(
 
     ScreenBackground {
         Column(
-            modifier = Modifier.fillMaxSize().padding(horizontal = 22.dp, vertical = 18.dp)
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 20.dp)
+                .padding(top = 8.dp)
+                .imePadding()
+                .navigationBarsPadding()
         ) {
-            PageHeader(
+            OnboardingHeader(
                 title = "Choose bank threads",
-                subtitle = "Step 3 of 7 · only selected threads are scanned",
+                subtitle = "Step 2 of 4 · Select conversations",
                 onBack = onBack
             )
+            Spacer(Modifier.height(12.dp))
+            StepProgress(current = 2)
             if (!granted) {
                 Spacer(Modifier.height(30.dp))
                 Text(
@@ -492,38 +783,106 @@ private fun ThreadsScreen(
                 Spacer(Modifier.height(12.dp))
                 PrimaryButton("Allow SMS access", onRequestPermission)
             } else if (loading) {
-                Box(modifier = Modifier.fillMaxWidth().padding(top = 40.dp), contentAlignment = Alignment.Center) {
+                Box(
+                    modifier = Modifier.fillMaxWidth().padding(top = 40.dp),
+                    contentAlignment = Alignment.Center
+                ) {
                     CircularProgressIndicator(color = Ledger.Primary)
                 }
             } else if (error != null) {
                 Spacer(Modifier.height(24.dp))
                 Text(error!!, style = MaterialTheme.typography.bodyMedium, color = Ledger.Danger)
             } else {
-                val selectedMessages = threads.filter { it.threadId in selected }.sumOf { it.messageCount }
-                Text(
-                    "${selected.size} selected · ${"%,d".format(selectedMessages)} messages",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = Ledger.Muted,
-                    modifier = Modifier.padding(top = 14.dp, bottom = 6.dp)
+                val filtered = remember(threads, search) {
+                    if (search.isBlank()) threads
+                    else threads.filter { it.address.contains(search, ignoreCase = true) }
+                }
+                val selectedMessages = threads
+                    .filter { it.threadId in selected }
+                    .sumOf { it.messageCount }
+                val allSelected = filtered.isNotEmpty() &&
+                    filtered.all { it.threadId in selected }
+
+                Spacer(Modifier.height(14.dp))
+                LedgerTextField(
+                    value = search,
+                    onValueChange = { search = it },
+                    placeholder = "Search sender or number",
+                    leadingIcon = Icons.Outlined.Search
                 )
-                LazyColumn(modifier = Modifier.weight(1f)) {
-                    items(threads, key = { it.threadId }) { thread ->
-                        ThreadChoiceRow(
-                            thread = thread,
-                            checked = thread.threadId in selected,
-                            onToggle = {
-                                selected = if (thread.threadId in selected) {
-                                    selected - thread.threadId
-                                } else {
-                                    selected + thread.threadId
-                                }
+                Spacer(Modifier.height(10.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "Suggested bank threads",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = Ledger.Ink,
+                        modifier = Modifier.weight(1f)
+                    )
+                    LedgerTextButton(
+                        text = if (allSelected) "Clear all" else "Select all",
+                        onClick = {
+                            val ids = filtered.map { it.threadId }.toSet()
+                            selected = if (allSelected) selected - ids else selected + ids
+                        }
+                    )
+                }
+                Spacer(Modifier.height(6.dp))
+                LedgerCard(modifier = Modifier.weight(1f)) {
+                    if (filtered.isEmpty()) {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                "No threads match your search.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = Ledger.Muted
+                            )
+                        }
+                    } else {
+                        LazyColumn(modifier = Modifier.fillMaxSize()) {
+                            itemsIndexed(filtered, key = { _, thread -> thread.threadId }) { index, thread ->
+                                ThreadChoiceRow(
+                                    thread = thread,
+                                    checked = thread.threadId in selected,
+                                    onToggle = {
+                                        selected = if (thread.threadId in selected) {
+                                            selected - thread.threadId
+                                        } else {
+                                            selected + thread.threadId
+                                        }
+                                    }
+                                )
+                                if (index != filtered.lastIndex) LedgerDivider()
                             }
-                        )
-                        LedgerDivider()
+                        }
                     }
                 }
+                Spacer(Modifier.height(10.dp))
+                NoticeBanner(
+                    title = "Only selected threads are scanned",
+                    body = "You can add or remove threads later in Settings → Banks & threads."
+                )
+                Spacer(Modifier.height(10.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "${selected.size} selected",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = Ledger.Ink,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Text(
+                        "${"%,d".format(selectedMessages)} messages",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Ledger.Muted
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
                 PrimaryButton(
-                    text = "Scan selected threads",
+                    text = "Scan selected",
                     onClick = { onScan(selected) },
                     enabled = selected.isNotEmpty()
                 )
@@ -538,6 +897,14 @@ private fun ThreadsScreen(
     }
 }
 
+private val lastSeenFormat: DateTimeFormatter =
+    DateTimeFormatter.ofPattern("d MMM", Locale.ENGLISH)
+
+private fun lastSeenLabel(millis: Long): String {
+    if (millis <= 0L) return "No messages"
+    return "Last " + lastSeenFormat.format(Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()))
+}
+
 @Composable
 private fun ThreadChoiceRow(
     thread: SmsThread,
@@ -545,26 +912,72 @@ private fun ThreadChoiceRow(
     onToggle: () -> Unit
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onToggle)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Checkbox(
-            checked = checked,
-            onCheckedChange = { onToggle() }
-        )
+        BrandCheckbox(checked = checked, onToggle = onToggle)
+        Surface(
+            modifier = Modifier.size(32.dp),
+            shape = RoundedCornerShape(10.dp),
+            color = Ledger.SurfaceAlt
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Text(
+                    thread.address.take(2).uppercase(Locale.ROOT),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = Ledger.Primary,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
         Column(modifier = Modifier.weight(1f)) {
-            Text(thread.address, style = MaterialTheme.typography.titleSmall, color = Ledger.Ink)
             Text(
-                thread.snippet,
+                thread.address,
+                style = MaterialTheme.typography.titleSmall,
+                color = Ledger.Ink,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                "${"%,d".format(thread.messageCount)} messages · ${lastSeenLabel(thread.lastDate)}",
                 style = MaterialTheme.typography.bodySmall,
                 color = Ledger.Muted,
                 maxLines = 1
             )
+        }
+    }
+}
+
+@Composable
+private fun ScanStatTile(
+    label: String,
+    value: String,
+    hint: String,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(14.dp),
+        color = Ledger.Surface,
+        border = BorderStroke(1.dp, Ledger.Outline)
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
             Text(
-                "${thread.messageCount} messages",
+                label.uppercase(Locale.ROOT),
                 style = MaterialTheme.typography.labelSmall,
                 color = Ledger.Muted
             )
+            Text(
+                value,
+                style = MaterialTheme.typography.headlineSmall,
+                color = Ledger.Ink,
+                modifier = Modifier.padding(top = 2.dp)
+            )
+            Text(hint, style = MaterialTheme.typography.labelSmall, color = Ledger.Muted)
         }
     }
 }
@@ -612,66 +1025,154 @@ private fun ScanScreen(
         }
     }
 
+    val processed = progress?.processed ?: 0
+    val percent = if (total == 0) 0 else (processed * 100 / total).coerceIn(0, 100)
+    val current = progress
+
     ScreenBackground {
         Column(
-            modifier = Modifier.fillMaxSize().padding(horizontal = 22.dp, vertical = 18.dp)
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 20.dp)
+                .padding(top = 8.dp)
+                .navigationBarsPadding()
         ) {
-            PageHeader(
-                title = "Reading your bank messages",
-                subtitle = "Step 4 of 7 · on-device scan"
+            OnboardingHeader(
+                title = "Scanning",
+                subtitle = "Step 3 of 4 · On-device",
+                onBack = onCancel,
+                badge = { Pill("Local only", PillTone.Primary) }
             )
-            Spacer(Modifier.height(26.dp))
+            Spacer(Modifier.height(12.dp))
+            StepProgress(current = 3)
+            Spacer(Modifier.height(14.dp))
             Text(
-                "Scanning selected threads",
+                "Reading your bank messages",
                 style = MaterialTheme.typography.headlineMedium,
                 color = Ledger.Ink
             )
             Text(
-                "Balance lines, OTPs and duplicates are skipped. Nothing leaves this phone.",
-                style = MaterialTheme.typography.bodyMedium,
+                "${"%,d".format(processed)} of ${"%,d".format(total)} messages",
+                style = MaterialTheme.typography.bodySmall,
                 color = Ledger.Muted,
                 modifier = Modifier.padding(top = 4.dp)
             )
-            Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(14.dp))
             LedgerCard {
-                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Column(modifier = Modifier.padding(14.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            "Progress",
+                            "Overall progress",
                             modifier = Modifier.weight(1f),
                             style = MaterialTheme.typography.titleSmall,
                             color = Ledger.Ink
                         )
                         Text(
-                            if (total == 0) "Preparing" else "${progress?.processed ?: 0} / $total",
+                            if (total == 0) "Preparing" else "$percent%",
                             style = MaterialTheme.typography.labelMedium,
                             color = Ledger.Primary
                         )
                     }
+                    Spacer(Modifier.height(7.dp))
                     LinearProgressIndicator(
-                        progress = if (total == 0) 0f else {
-                            ((progress?.processed ?: 0).toFloat() / total).coerceIn(0f, 1f)
-                        },
+                        progress = if (total == 0) 0f else processed.toFloat() / total,
                         modifier = Modifier.fillMaxWidth().height(8.dp).clip(CircleShape),
                         color = Ledger.Primary,
                         trackColor = Ledger.SurfaceAlt
                     )
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        ScanStat("Transactions", progress?.parsed ?: 0)
-                        ScanStat("Skipped", progress?.skipped ?: 0)
-                        ScanStat("Unparsed", progress?.unparsed ?: 0)
+                    Spacer(Modifier.height(12.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ScanStatTile(
+                            "Transactions",
+                            "%,d".format(progress?.parsed ?: 0),
+                            "from ${"%,d".format(total)} messages",
+                            Modifier.weight(1f)
+                        )
+                        ScanStatTile(
+                            "Skipped",
+                            "%,d".format(progress?.skipped ?: 0),
+                            "balances, OTPs, duplicates",
+                            Modifier.weight(1f)
+                        )
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ScanStatTile(
+                            "Unparsed",
+                            "%,d".format(progress?.unparsed ?: 0),
+                            "you can review later",
+                            Modifier.weight(1f)
+                        )
+                        ScanStatTile(
+                            "Processed",
+                            "%,d".format(processed),
+                            "of ${"%,d".format(total)} messages",
+                            Modifier.weight(1f)
+                        )
+                    }
+                }
+            }
+            if (current != null && current.currentBody.isNotBlank()) {
+                Spacer(Modifier.height(14.dp))
+                Text(
+                    "Currently parsing",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = Ledger.Ink
+                )
+                Spacer(Modifier.height(8.dp))
+                LedgerCard {
+                    Column(modifier = Modifier.padding(13.dp)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Avatar(current.currentAddress, Ledger.Primary, size = 32)
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    current.currentAddress,
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = Ledger.Ink
+                                )
+                                Text(
+                                    "Message ${"%,d".format(processed)} of ${"%,d".format(total)}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = Ledger.Muted
+                                )
+                            }
+                        }
+                        Spacer(Modifier.height(10.dp))
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = Ledger.SurfaceAlt,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                current.currentBody,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Ledger.Ink,
+                                maxLines = 3,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.padding(horizontal = 11.dp, vertical = 10.dp)
+                            )
+                        }
                     }
                 }
             }
             if (error != null) {
+                Spacer(Modifier.height(14.dp))
                 Text(
                     error!!,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Ledger.Danger,
-                    modifier = Modifier.padding(top = 16.dp)
+                    color = Ledger.Danger
                 )
             }
             Spacer(Modifier.weight(1f))
+            NoticeBanner(
+                title = "Your messages stay on this phone",
+                body = "Keep this screen open while the scan finishes. Nothing is uploaded.",
+                icon = Icons.Outlined.Shield
+            )
+            Spacer(Modifier.height(10.dp))
             if (running) {
                 SecondaryButton("Cancel scan", {
                     cancelled = true
@@ -680,33 +1181,7 @@ private fun ScanScreen(
             } else {
                 PrimaryButton("Back to threads", onCancel)
             }
-            Text(
-                "Your messages stay on this phone. The scan only reads the threads you selected.",
-                style = MaterialTheme.typography.labelSmall,
-                color = Ledger.Muted,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(top = 10.dp)
-            )
             Spacer(Modifier.height(10.dp))
-        }
-    }
-}
-
-@Composable
-private fun RowScope.ScanStat(label: String, value: Int) {
-    Surface(
-        modifier = Modifier.weight(1f),
-        shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp),
-        color = Ledger.SurfaceAlt
-    ) {
-        Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 9.dp)) {
-            Text(label, style = MaterialTheme.typography.labelSmall, color = Ledger.Muted)
-            Text(
-                "%,d".format(value),
-                style = MaterialTheme.typography.titleMedium,
-                color = Ledger.Ink,
-                modifier = Modifier.padding(top = 2.dp)
-            )
         }
     }
 }
@@ -720,9 +1195,8 @@ private fun ReviewGroupsScreen(
 ) {
     var instruments by remember { mutableStateOf<List<DetectedInstrument>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
-    var reloadKey by remember { mutableStateOf(0) }
 
-    LaunchedEffect(reloadKey) {
+    LaunchedEffect(Unit) {
         loading = true
         thread {
             val loaded = repository.detectedInstruments()
@@ -741,21 +1215,42 @@ private fun ReviewGroupsScreen(
 
     ScreenBackground {
         Column(
-            modifier = Modifier.fillMaxSize().padding(horizontal = 22.dp, vertical = 18.dp)
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 20.dp)
+                .padding(top = 8.dp)
+                .navigationBarsPadding()
         ) {
-            PageHeader(
+            OnboardingHeader(
                 title = "Review instruments",
-                subtitle = if (groups.isEmpty()) "All values confirmed" else "${pending.size} values need review",
-                onBack = onBack
+                subtitle = when {
+                    loading -> "Loading values…"
+                    groups.isEmpty() -> "All values confirmed"
+                    else -> "${pending.size} values found in ${groups.size} threads"
+                },
+                onBack = onBack,
+                badge = { Pill("1 of 2") }
             )
             if (loading) {
-                Box(modifier = Modifier.fillMaxWidth().padding(top = 34.dp), contentAlignment = Alignment.Center) {
+                Box(
+                    modifier = Modifier.fillMaxWidth().padding(top = 34.dp),
+                    contentAlignment = Alignment.Center
+                ) {
                     CircularProgressIndicator(color = Ledger.Primary)
                 }
             } else if (groups.isEmpty()) {
-                LedgerCard(modifier = Modifier.padding(top = 22.dp)) {
-                    Column(modifier = Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(Icons.Outlined.Check, contentDescription = null, tint = Ledger.Success, modifier = Modifier.size(34.dp))
+                Spacer(Modifier.height(20.dp))
+                LedgerCard {
+                    Column(
+                        modifier = Modifier.padding(20.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(
+                            Icons.Outlined.Check,
+                            contentDescription = null,
+                            tint = Ledger.Success,
+                            modifier = Modifier.size(34.dp)
+                        )
                         Text(
                             "Everything is confirmed",
                             style = MaterialTheme.typography.titleMedium,
@@ -770,44 +1265,54 @@ private fun ReviewGroupsScreen(
                         )
                     }
                 }
+                Spacer(Modifier.weight(1f))
+                PrimaryButton("Continue", onReviewLater)
             } else {
+                Spacer(Modifier.height(14.dp))
                 Text(
                     "Which numbers are cards,\nand which are accounts?",
                     style = MaterialTheme.typography.headlineMedium,
-                    color = Ledger.Ink,
-                    modifier = Modifier.padding(top = 18.dp)
+                    color = Ledger.Ink
                 )
                 Text(
-                    "Grouped by sender. You can pause and finish this later from Home.",
+                    "We grouped the numbers by sender and suggested a type from the SMS wording. You can change any of them later.",
                     style = MaterialTheme.typography.bodySmall,
                     color = Ledger.Muted,
-                    modifier = Modifier.padding(top = 6.dp, bottom = 14.dp)
+                    modifier = Modifier.padding(top = 6.dp, bottom = 12.dp)
                 )
-                LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(groups, key = { it.first }) { (address, rows) ->
-                        InstrumentGroupRow(
-                            address = address,
-                            rows = rows,
-                            isFirst = address == firstAddress,
-                            onClick = { onReview(address) }
-                        )
+                LedgerCard(modifier = Modifier.weight(1f)) {
+                    LazyColumn(modifier = Modifier.fillMaxSize()) {
+                        itemsIndexed(groups, key = { _, group -> group.first }) { index, group ->
+                            InstrumentGroupRow(
+                                address = group.first,
+                                rows = group.second,
+                                isFirst = group.first == firstAddress,
+                                onClick = { onReview(group.first) }
+                            )
+                            if (index != groups.lastIndex) LedgerDivider()
+                        }
                     }
                 }
+                Spacer(Modifier.height(10.dp))
+                NoticeBanner(
+                    title = "${pending.size} values need review",
+                    body = "Transactions still import. Unverified values are tagged until you confirm them.",
+                    icon = Icons.Outlined.WarningAmber
+                )
+                Spacer(Modifier.height(10.dp))
                 PrimaryButton(
                     text = if (firstAddress == null) "Continue" else "Review ${firstAddress.displayName()} first",
-                    onClick = { firstAddress?.let(onReview) },
+                    onClick = { firstAddress?.let(onReview) ?: onReviewLater() },
                     enabled = firstAddress != null
                 )
-                LedgerTextButton(
-                    text = "Review later",
-                    onClick = onReviewLater,
-                    modifier = Modifier.align(Alignment.CenterHorizontally)
-                )
+                Spacer(Modifier.height(8.dp))
+                SecondaryButton("Review later", onReviewLater)
                 Text(
-                    "Only unverified values are shown. You can return from Home or Settings.",
+                    "Only unverified values are shown. You can pause and return from Home.",
                     style = MaterialTheme.typography.labelSmall,
                     color = Ledger.Muted,
-                    textAlign = TextAlign.Center
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
                 )
             }
             Spacer(Modifier.height(10.dp))
@@ -827,28 +1332,82 @@ private fun InstrumentGroupRow(
 ) {
     val cards = rows.count { it.channel == TransactionChannel.CARD }
     val accounts = rows.count { it.channel == TransactionChannel.ACCOUNT }
-    LedgerCard(modifier = Modifier) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onClick)
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(11.dp)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 11.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(11.dp)
+    ) {
+        Surface(
+            modifier = Modifier.size(30.dp),
+            shape = RoundedCornerShape(9.dp),
+            color = Ledger.SurfaceAlt
         ) {
-            Avatar(address.take(2), LedgerChartColors[(address.hashCode() and Int.MAX_VALUE) % LedgerChartColors.size])
-            Column(modifier = Modifier.weight(1f)) {
-                Text(address, style = MaterialTheme.typography.titleSmall, color = Ledger.Ink)
+            Box(contentAlignment = Alignment.Center) {
                 Text(
-                    "${rows.size} values · $cards cards · $accounts accounts",
+                    address.take(2).uppercase(Locale.ROOT),
                     style = MaterialTheme.typography.labelSmall,
-                    color = Ledger.Muted
+                    color = Ledger.Primary,
+                    fontWeight = FontWeight.Bold
                 )
             }
-            if (isFirst) {
-                Pill("Start here", PillTone.Primary)
-            } else {
-                Pill("Review", PillTone.Neutral)
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(address, style = MaterialTheme.typography.titleSmall, color = Ledger.Ink)
+            Text(
+                "${rows.size} values · $cards cards · $accounts accounts",
+                style = MaterialTheme.typography.bodySmall,
+                color = Ledger.Muted
+            )
+        }
+        if (isFirst) {
+            Pill("Start here", PillTone.Primary)
+        } else {
+            Pill("Review", PillTone.Neutral)
+        }
+    }
+}
+
+@Composable
+private fun SegmentedChoice(
+    selected: TransactionChannel?,
+    onSelect: (TransactionChannel?) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(Ledger.SurfaceAlt)
+            .padding(3.dp),
+        horizontalArrangement = Arrangement.spacedBy(3.dp)
+    ) {
+        listOf(
+            TransactionChannel.CARD to "Card",
+            TransactionChannel.ACCOUNT to "Account",
+            null to "Ignore"
+        ).forEach { (value, label) ->
+            val active = selected == value
+            Surface(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(9.dp))
+                    .clickable { onSelect(value) },
+                shape = RoundedCornerShape(9.dp),
+                color = if (active) Ledger.Surface else Color.Transparent,
+                border = if (active) BorderStroke(1.dp, Ledger.Outline) else null
+            ) {
+                Box(
+                    modifier = Modifier.padding(vertical = 8.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        label,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = if (active) Ledger.Ink else Ledger.Muted
+                    )
+                }
             }
         }
     }
@@ -865,6 +1424,7 @@ private fun ReviewConfirmScreen(
 ) {
     var instruments by remember { mutableStateOf<List<DetectedInstrument>>(emptyList()) }
     var choices by remember { mutableStateOf<Map<String, TransactionChannel?>>(emptyMap()) }
+    var nextAddress by remember { mutableStateOf<String?>(null) }
     var loading by remember { mutableStateOf(true) }
     var saving by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -876,8 +1436,12 @@ private fun ReviewConfirmScreen(
         loading = true
         thread {
             val all = repository.detectedInstruments().filter { it.address == address }
+            val next = repository.pendingInstruments()
+                .firstOrNull { it.address != address }
+                ?.address
             Handler(Looper.getMainLooper()).post {
                 instruments = all
+                nextAddress = next
                 choices = all.associate { key(it) to it.channel }
                 loading = false
             }
@@ -916,71 +1480,89 @@ private fun ReviewConfirmScreen(
         }
     }
 
+    val saveLabel = when {
+        nextAddress != null -> "Save ${instruments.size} and review ${nextAddress!!.displayName()}"
+        else -> "Save ${instruments.size} values"
+    }
+
     ScreenBackground {
         Column(
-            modifier = Modifier.fillMaxSize().padding(horizontal = 22.dp, vertical = 18.dp)
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 20.dp)
+                .padding(top = 8.dp)
+                .navigationBarsPadding()
         ) {
-            PageHeader(
-                title = "Confirm $address numbers",
-                subtitle = "Review every value from this sender",
-                onBack = onBack
+            OnboardingHeader(
+                title = "Confirm ${address.displayName()} numbers",
+                subtitle = if (loading) {
+                    "Loading values…"
+                } else {
+                    "${instruments.size} values · suggested from SMS wording"
+                },
+                onBack = onBack,
+                badge = { Pill("2 of 2") }
             )
             if (loading) {
-                Box(modifier = Modifier.fillMaxWidth().padding(top = 34.dp), contentAlignment = Alignment.Center) {
+                Box(
+                    modifier = Modifier.fillMaxWidth().padding(top = 34.dp),
+                    contentAlignment = Alignment.Center
+                ) {
                     CircularProgressIndicator(color = Ledger.Primary)
                 }
             } else {
-                Text(
-                    "Which numbers are cards,\nand which are accounts?",
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = Ledger.Ink,
-                    modifier = Modifier.padding(top = 18.dp)
-                )
-                Text(
-                    "The suggestion comes from the SMS wording. You can change any value.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Ledger.Muted,
-                    modifier = Modifier.padding(top = 6.dp, bottom = 12.dp)
-                )
-                LazyColumn(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    items(instruments, key = { key(it) }) { instrument ->
-                        InstrumentChoiceCard(
-                            instrument = instrument,
-                            selected = choices[key(instrument)],
-                            onSelect = { channel ->
-                                choices = choices + (key(instrument) to channel)
-                            }
-                        )
+                Spacer(Modifier.height(14.dp))
+                LedgerCard(modifier = Modifier.weight(1f)) {
+                    LazyColumn(modifier = Modifier.fillMaxSize()) {
+                        itemsIndexed(instruments, key = { _, instrument -> key(instrument) }) { index, instrument ->
+                            InstrumentChoiceRow(
+                                instrument = instrument,
+                                selected = choices[key(instrument)],
+                                onSelect = { channel ->
+                                    choices = choices + (key(instrument) to channel)
+                                }
+                            )
+                            if (index != instruments.lastIndex) LedgerDivider()
+                        }
                     }
                 }
+                LedgerTextButton(
+                    text = "Mark all ${address.displayName()} values as cards",
+                    onClick = {
+                        choices = choices.mapValues { TransactionChannel.CARD }
+                    },
+                    modifier = Modifier.align(Alignment.CenterHorizontally)
+                )
+                NoticeBanner(
+                    title = "Why we suggest a type",
+                    body = "“card ending 1214” means Card. “from account 001” means Account. You can override every value."
+                )
                 if (error != null) {
+                    Spacer(Modifier.height(8.dp))
                     Text(error!!, style = MaterialTheme.typography.bodySmall, color = Ledger.Danger)
                 }
+                Spacer(Modifier.height(10.dp))
                 if (saving) {
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = Ledger.Primary)
-                        Text("Applying this to stored SMS…", style = MaterialTheme.typography.bodySmall, color = Ledger.Muted)
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                            color = Ledger.Primary
+                        )
+                        Text(
+                            "Applying this to stored SMS…",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Ledger.Muted
+                        )
                     }
                 } else {
-                    PrimaryButton("Save and review next", ::save)
-                    LedgerTextButton(
-                        text = "Review later",
-                        onClick = onPause,
-                        modifier = Modifier.align(Alignment.CenterHorizontally)
-                    )
-                    Text(
-                        "Saving rebuilds parsed transactions from stored SMS.",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Ledger.Muted,
-                        textAlign = TextAlign.Center
-                    )
+                    PrimaryButton(saveLabel, ::save)
+                    Spacer(Modifier.height(8.dp))
+                    SecondaryButton("Save and review later", onPause)
                 }
             }
             Spacer(Modifier.height(10.dp))
@@ -989,82 +1571,52 @@ private fun ReviewConfirmScreen(
 }
 
 @Composable
-private fun InstrumentChoiceCard(
+private fun InstrumentChoiceRow(
     instrument: DetectedInstrument,
     selected: TransactionChannel?,
     onSelect: (TransactionChannel?) -> Unit
 ) {
-    LedgerCard {
-        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text(instrument.digits, style = MaterialTheme.typography.titleMedium, color = Ledger.Ink)
-                        ChannelIcon(instrument.channel)
-                    }
-                    Text(
-                        "${instrument.messageCount} message(s)" + if (instrument.verified) " · confirmed" else "",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Ledger.Muted
-                    )
-                }
-                if (instrument.verified) {
-                    Pill("Confirmed", PillTone.Success)
-                }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ChoicePill(
-                    label = "Card",
-                    selected = selected == TransactionChannel.CARD,
-                    onClick = { onSelect(TransactionChannel.CARD) },
-                    modifier = Modifier.weight(1f)
-                )
-                ChoicePill(
-                    label = "Account",
-                    selected = selected == TransactionChannel.ACCOUNT,
-                    onClick = { onSelect(TransactionChannel.ACCOUNT) },
-                    modifier = Modifier.weight(1f)
-                )
-                ChoicePill(
-                    label = "Ignore",
-                    selected = selected == null,
-                    onClick = { onSelect(null) },
-                    modifier = Modifier.weight(1f)
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun ChoicePill(
-    label: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Surface(
-        modifier = modifier,
-        shape = androidx.compose.foundation.shape.RoundedCornerShape(9.dp),
-        color = if (selected) Ledger.PrimarySoft else Ledger.Surface,
-        border = androidx.compose.foundation.BorderStroke(
-            1.dp,
-            if (selected) Ledger.Primary else Ledger.Outline
-        )
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onClick)
-                .padding(vertical = 9.dp),
-            contentAlignment = Alignment.Center
-        ) {
+    Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 11.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                label,
-                style = MaterialTheme.typography.labelMedium,
-                color = if (selected) Ledger.Primary else Ledger.Ink
+                instrument.digits,
+                style = MaterialTheme.typography.titleMedium,
+                color = Ledger.Ink
             )
+            Spacer(Modifier.width(8.dp))
+            Pill("${instrument.messageCount} txns")
+            Spacer(Modifier.weight(1f))
+            if (instrument.verified) {
+                Pill("Confirmed", PillTone.Success)
+            } else {
+                val suggested = when (instrument.channel) {
+                    TransactionChannel.CARD -> "Card suggested"
+                    TransactionChannel.ACCOUNT -> "Account suggested"
+                    else -> "Suggested"
+                }
+                Pill(
+                    suggested,
+                    if (instrument.channel == TransactionChannel.CARD) {
+                        PillTone.Primary
+                    } else {
+                        PillTone.Neutral
+                    }
+                )
+            }
         }
+        Text(
+            when {
+                instrument.verified -> "Confirmed earlier"
+                instrument.channel == TransactionChannel.CARD -> "Seen in card purchase messages"
+                instrument.channel == TransactionChannel.ACCOUNT -> "Seen in transfer or bill messages"
+                else -> "Suggested from SMS wording"
+            },
+            style = MaterialTheme.typography.labelSmall,
+            color = Ledger.Muted,
+            modifier = Modifier.padding(top = 4.dp)
+        )
+        Spacer(Modifier.height(8.dp))
+        SegmentedChoice(selected = selected, onSelect = onSelect)
     }
 }
 
@@ -1092,92 +1644,122 @@ private fun CompleteScreen(
     }
 
     val confirmed = (totalInstruments - pending).coerceAtLeast(0)
-    ScreenBackground {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 22.dp, vertical = 18.dp)
-        ) {
-            Spacer(Modifier.height(18.dp))
+    OnboardingPage {
+        OnboardingHeader(
+            title = "Import complete",
+            subtitle = "First run · finished",
+            badge = { Pill("✓ Ready", PillTone.Success) }
+        )
+        Spacer(Modifier.height(16.dp))
+        HeroPanel(200.dp) {
             Surface(
-                modifier = Modifier.size(92.dp).align(Alignment.CenterHorizontally),
+                modifier = Modifier.size(72.dp),
                 shape = CircleShape,
-                color = Ledger.SurfaceSoft
+                color = Ledger.Primary
             ) {
                 Box(contentAlignment = Alignment.Center) {
-                    Surface(
-                        modifier = Modifier.size(54.dp),
-                        shape = CircleShape,
-                        color = Ledger.Primary
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(Icons.Outlined.Check, contentDescription = null, tint = Ledger.OnPrimary, modifier = Modifier.size(28.dp))
-                        }
-                    }
+                    Icon(
+                        Icons.Outlined.Check,
+                        contentDescription = null,
+                        tint = Ledger.OnPrimary,
+                        modifier = Modifier.size(36.dp)
+                    )
                 }
             }
-            Text(
-                "You're all set.",
-                style = MaterialTheme.typography.displayMedium,
-                color = Ledger.Ink,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth().padding(top = 20.dp)
-            )
-            Text(
-                "${"%,d".format(transactionCount)} transactions from " +
-                    "${"%,d".format(importResult?.rawInserted ?: 0)} messages are ready on this phone.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = Ledger.Muted,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth().padding(top = 6.dp, start = 18.dp, end = 18.dp)
-            )
-            Spacer(Modifier.height(22.dp))
-            LedgerCard {
-                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        CompleteStat("Transactions", "%,d".format(transactionCount), Modifier.weight(1f))
-                        CompleteStat("Skipped", "%,d".format(importResult?.skipped ?: 0), Modifier.weight(1f))
-                    }
-                    LedgerDivider()
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        CompleteStat("Confirmed", "$confirmed / $totalInstruments", Modifier.weight(1f))
-                        CompleteStat("Unparsed", "%,d".format(importResult?.unparsed ?: 0), Modifier.weight(1f))
-                    }
-                }
-            }
-            if (pending > 0) {
-                ReviewBanner(
-                    title = "$pending card/account values need review",
-                    body = "You can review them now or later from Home.",
-                    modifier = Modifier.padding(top = 14.dp)
-                )
-            }
-            Spacer(Modifier.height(22.dp))
-            PrimaryButton("Go to Home", onHome)
-            if (pending > 0) {
-                SecondaryButton(
-                    text = "Review $pending values",
-                    onClick = onReviewPending,
-                    modifier = Modifier.padding(top = 8.dp)
-                )
-            }
-            Text(
-                "You can change instruments, categories and exports later in Settings.",
-                style = MaterialTheme.typography.labelSmall,
-                color = Ledger.Muted,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth().padding(top = 12.dp)
-            )
-            Spacer(Modifier.height(20.dp))
         }
+        Text(
+            "You're all set.",
+            style = MaterialTheme.typography.headlineLarge,
+            color = Ledger.Ink,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth().padding(top = 18.dp)
+        )
+        Text(
+            "${"%,d".format(transactionCount)} transactions from " +
+                "${"%,d".format(importResult?.rawInserted ?: 0)} messages are ready on this phone.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = Ledger.Muted,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth().padding(top = 6.dp, start = 14.dp, end = 14.dp)
+        )
+        Spacer(Modifier.height(18.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            CompleteStat(
+                label = "Transactions",
+                value = "%,d".format(transactionCount),
+                hint = "Jan – Oct 2026",
+                modifier = Modifier.weight(1f)
+            )
+            CompleteStat(
+                label = "Skipped",
+                value = "%,d".format(importResult?.skipped ?: 0),
+                hint = "balances, OTPs, duplicates",
+                modifier = Modifier.weight(1f)
+            )
+        }
+        Spacer(Modifier.height(10.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            CompleteStat(
+                label = "Instruments",
+                value = "$confirmed / $totalInstruments",
+                hint = "confirmed",
+                modifier = Modifier.weight(1f)
+            )
+            CompleteStat(
+                label = "Unparsed",
+                value = "%,d".format(importResult?.unparsed ?: 0),
+                hint = "messages to review",
+                modifier = Modifier.weight(1f)
+            )
+        }
+        if (pending > 0) {
+            Spacer(Modifier.height(14.dp))
+            ReviewBanner(
+                title = "$pending card/account values need review",
+                body = "You can review them now or later from Home."
+            )
+        }
+        Spacer(Modifier.height(20.dp))
+        PrimaryButton("Go to Home", onHome)
+        if (pending > 0) {
+            Spacer(Modifier.height(8.dp))
+            SecondaryButton(
+                text = "Review $pending values",
+                onClick = onReviewPending
+            )
+        }
+        Text(
+            "You can change instruments, categories and exports later in Settings.",
+            style = MaterialTheme.typography.labelSmall,
+            color = Ledger.Muted,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth().padding(top = 10.dp)
+        )
+        Spacer(Modifier.height(16.dp))
     }
 }
 
 @Composable
-private fun CompleteStat(label: String, value: String, modifier: Modifier = Modifier) {
-    Column(modifier = modifier) {
-        Text(label, style = MaterialTheme.typography.labelSmall, color = Ledger.Muted)
-        Text(value, style = MaterialTheme.typography.titleLarge, color = Ledger.Ink, modifier = Modifier.padding(top = 2.dp))
+private fun CompleteStat(
+    label: String,
+    value: String,
+    hint: String,
+    modifier: Modifier = Modifier
+) {
+    LedgerCard(modifier = modifier) {
+        Column(modifier = Modifier.padding(horizontal = 13.dp, vertical = 11.dp)) {
+            Text(
+                label.uppercase(Locale.ROOT),
+                style = MaterialTheme.typography.labelSmall,
+                color = Ledger.Muted
+            )
+            Text(
+                value,
+                style = MaterialTheme.typography.headlineSmall,
+                color = Ledger.Ink,
+                modifier = Modifier.padding(top = 2.dp)
+            )
+            Text(hint, style = MaterialTheme.typography.labelSmall, color = Ledger.Muted)
+        }
     }
 }

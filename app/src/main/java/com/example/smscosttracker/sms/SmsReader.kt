@@ -8,7 +8,8 @@ data class SmsThread(
     val threadId: Long,
     val address: String,
     val messageCount: Int,
-    val snippet: String
+    val snippet: String,
+    val lastDate: Long
 )
 
 object SmsReader {
@@ -17,7 +18,8 @@ object SmsReader {
         val projection = arrayOf(
             Telephony.Sms.THREAD_ID,
             Telephony.Sms.ADDRESS,
-            Telephony.Sms.BODY
+            Telephony.Sms.BODY,
+            Telephony.Sms.DATE
         )
         context.contentResolver.query(
             Telephony.Sms.CONTENT_URI,
@@ -30,6 +32,7 @@ object SmsReader {
             val threadColumn = cursor.getColumnIndexOrThrow(Telephony.Sms.THREAD_ID)
             val addressColumn = cursor.getColumnIndexOrThrow(Telephony.Sms.ADDRESS)
             val bodyColumn = cursor.getColumnIndexOrThrow(Telephony.Sms.BODY)
+            val dateColumn = cursor.getColumnIndexOrThrow(Telephony.Sms.DATE)
             while (cursor.moveToNext()) {
                 val threadId = cursor.getLong(threadColumn)
                 if (!seen.add(threadId)) continue
@@ -37,7 +40,8 @@ object SmsReader {
                     threadId = threadId,
                     address = cursor.getString(addressColumn) ?: "",
                     messageCount = countMessages(context, threadId),
-                    snippet = cursor.getString(bodyColumn) ?: ""
+                    snippet = cursor.getString(bodyColumn) ?: "",
+                    lastDate = cursor.getLong(dateColumn)
                 )
             }
         }

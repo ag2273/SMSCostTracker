@@ -11,7 +11,9 @@ data class ImportProgress(
     val total: Int,
     val parsed: Int,
     val skipped: Int,
-    val unparsed: Int
+    val unparsed: Int,
+    val currentAddress: String = "",
+    val currentBody: String = ""
 )
 
 data class ImportResult(
@@ -107,14 +109,16 @@ class TransactionImporter(
                 is ParseOutcome.Skipped -> skipped++
                 is ParseOutcome.Unparsed -> unparsed++
             }
-            if (index == messages.lastIndex || index % 25 == 0) {
+            if (index == messages.lastIndex || index % 10 == 0) {
                 onProgress(
                     ImportProgress(
                         processed = index + 1,
                         total = messages.size,
                         parsed = parsed,
                         skipped = skipped,
-                        unparsed = unparsed
+                        unparsed = unparsed,
+                        currentAddress = message.address,
+                        currentBody = message.body
                     )
                 )
             }
