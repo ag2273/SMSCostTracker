@@ -235,6 +235,26 @@ private fun ImportScreen(
             ) {
                 Text("Import ${selected.size} thread(s)")
             }
+            Button(
+                enabled = !loading,
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                onClick = {
+                    loading = true
+                    thread {
+                        val result = importer.rebuildFromStored()
+                        val total = repository.count()
+                        Handler(Looper.getMainLooper()).post {
+                            loading = false
+                            onImported()
+                            status = "Rebuilt from ${result.rawInserted} stored SMS, " +
+                                "parsed ${result.parsed}, stored ${result.stored}. " +
+                                "Transactions total: $total."
+                        }
+                    }
+                }
+            ) {
+                Text("Rebuild from stored SMS")
+            }
         }
         if (status.isNotEmpty()) {
             Text(status, modifier = Modifier.padding(top = 8.dp))

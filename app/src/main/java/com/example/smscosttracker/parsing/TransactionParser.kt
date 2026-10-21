@@ -19,8 +19,23 @@ object TransactionParser {
         "(?i)([0-9][0-9,]*(?:\\.[0-9]{1,2})?)\\s*(EGP|SAR|AED|USD|ريال|جنيه|درهم)"
     )
     private val plainAmount = Regex(
-        "(?i)(?:amount|debit(?:ed)?|paid|payment|purchase|withdrawal)" +
+        "(?i)(?:amount|debit(?:ed)?|paid|payment|purchase|withdrawal|deducted|spent|charged)" +
             "[^0-9]{0,20}([0-9][0-9,]*(?:\\.[0-9]{1,2})?)"
+    )
+    private val nonTransaction = Regex(
+        "(?i)\\b(otp|one[- ]time password|verification code|declined|failed|not processed)\\b"
+    )
+    private val creditOrRefund = Regex(
+        "(?i)\\b(refund|refunded|credited|deposited|deposit received|deposit of|salary|" +
+            "cashback|reversal|reversed|received from|incoming transfer)\\b"
+    )
+    private val balanceLine = Regex(
+        "(?i)\\b(available balance|current balance|balance|credit limit|available limit|" +
+            "minimum due|total due|statement).*$"
+    )
+    private val transactionHint = Regex(
+        "(?i)\\b(amount|purchase|payment|paid|debit(?:ed)?|withdraw(?:al|n)?|deducted|" +
+            "spent|charged|transfer(?:red)?|pos|cheque|bill)\\b"
     )
     private val merchantPatterns = listOf(
         Regex("(?i)\\bat\\s+([\\p{L}0-9&.'\\- ]{2,40})"),
@@ -36,31 +51,42 @@ object TransactionParser {
     )
 
     fun parse(message: RawSms, defaultCurrency: String = "EGP"): ParsedTransaction? {
-        val (amountMinor, currency) = extractAmount(message.body, defaultCurrency) ?: return null
-        val merchant = extractMerchant(message.body)
-        val occurredAt = extractDate(message.body, message.date)
+        val body = message.body
+        if (nonTransaction.containsMatchIn(body)) return null
+        if (creditOrRefund.containsMatchIn(body)) return null
+        val amount = extractAmount(body, defaultCurrency) ?: return null
         return ParsedTransaction(
-            amountMinor = amountMinor,
-            currency = currency,
-            merchant = merchant,
-            occurredAt = occurredAt,
+            amountMinor = amount.first,
+            currency = amount.second,
+            merchant = extractMerchant(body),
+            occurredAt = extractDate(body, message.date),
             sourceAddress = message.address
         )
     }
 
     private fun extractAmount(body: String, defaultCurrency: String): Pair<Long, String>? {
-        val currencyMatch = currencyFirst.find(body) ?: currencyLast.find(body)
-        if (currencyMatch != null) {
-            val groups = currencyMatch.groupValues
-            val numberFirst = groups[1].firstOrNull()?.isDigit() == true
-            val currencyToken = if (numberFirst) groups[2] else groups[1]
-            val numberToken = if (numberFirst) groups[1] else groups[2]
-            val amount = numberToken.replace(",", "").toBigDecimalOrNull()
-            if (amount != null) return amount.toMinorUnits() to currencyCode(currencyToken)
+        val lines = body.lines()
+            .map { balanceLine.replace(it, " ") }
+            .filter { it.isNotBlank() }
+        if (lines.isEmpty()) return null
+
+        val hinted = lines.filter { transactionHint.containsMatchIn(it) }
+        val candidates = if (hinted.isNotEmpty()) hinted else lines
+        for (line in candidates) {
+            val currencyMatch = currencyFirst.find(line) ?: currencyLast.find(line)
+            if (currencyMatch != null) {
+                val groups = currencyMatch.groupValues
+                val numberFirst = groups[1].firstOrNull()?.isDigit() == true
+                val currencyToken = if (numberFirst) groups[2] else groups[1]
+                val numberToken = if (numberFirst) groups[1] else groups[2]
+                val amount = numberToken.replace(",", "").toBigDecimalOrNull()
+                if (amount != null) return amount.toMinorUnits() to currencyCode(currencyToken)
+            }
+            val plain = plainAmount.find(line)?.groupValues?.get(1) ?: continue
+            val amount = plain.replace(",", "").toBigDecimalOrNull() ?: continue
+            return amount.toMinorUnits() to defaultCurrency.uppercase()
         }
-        val plain = plainAmount.find(body)?.groupValues?.get(1) ?: return null
-        val amount = plain.replace(",", "").toBigDecimalOrNull() ?: return null
-        return amount.toMinorUnits() to defaultCurrency.uppercase()
+        return null
     }
 
     private fun extractMerchant(body: String): String {
@@ -71,7 +97,10 @@ object TransactionParser {
                 .replace(Regex("\\s+\\d+.*$"), "")
                 .trim()
                 .trim('.', ',', '-')
-            if (cleaned.length >= 2 && !cleaned.equals("your account", ignoreCase = true)) {
+            if (cleaned.length >= 2 &&
+                !cleaned.equals("your account", ignoreCase = true) &&
+                !balanceLine.containsMatchIn(cleaned)
+            ) {
                 return cleaned
             }
         }

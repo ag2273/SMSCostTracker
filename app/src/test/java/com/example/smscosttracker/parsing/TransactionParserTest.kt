@@ -70,4 +70,51 @@ class TransactionParserTest {
     fun `returns null when no amount is present`() {
         assertNull(TransactionParser.parse(message("Your OTP is 123456")))
     }
+
+    @Test
+    fun `ignores balance-only messages`() {
+        assertNull(
+            TransactionParser.parse(
+                message("Available Balance: SAR 55,143.25\nCredit Limit: SAR 60,000.00")
+            )
+        )
+    }
+
+    @Test
+    fun `ignores refunds and other credits`() {
+        assertNull(
+            TransactionParser.parse(
+                message(
+                    "Credit Card: Refund\n" +
+                        "An Amount of SAR 1,259.00 from SAUDI AIRLINES to SAB Mastercard " +
+                        "Premier Credit Card (0542)\nDate: 2026-10-20 13:01:19\n" +
+                        "Balance: SAR 52945.21"
+                )
+            )
+        )
+    }
+
+    @Test
+    fun `prefers the purchase amount over the balance`() {
+        val parsed = TransactionParser.parse(
+            message("Purchase of SAR 120.50 at Carrefour\nBalance: SAR 5,000.00")
+        )!!
+
+        assertEquals(12050L, parsed.amountMinor)
+        assertEquals("SAR", parsed.currency)
+        assertEquals("Carrefour", parsed.merchant)
+    }
+
+    @Test
+    fun `parses transfer amount from its labelled line`() {
+        val parsed = TransactionParser.parse(
+            message(
+                "Funds Transfer Accepted (sarie)\nFrom: 3060\n" +
+                    "To: BARQ SAFE AND DEPOSIT CLIENT MONEY\nAmount: SAR 10000.00"
+            )
+        )!!
+
+        assertEquals(1000000L, parsed.amountMinor)
+        assertEquals("SAR", parsed.currency)
+    }
 }

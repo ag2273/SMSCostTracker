@@ -12,11 +12,14 @@ interface RawSmsDao {
     @Query("SELECT COUNT(*) FROM raw_sms")
     fun count(): Int
 
+    @Query("SELECT * FROM raw_sms")
+    fun getAll(): List<RawSmsEntity>
+
     @Query(
         "SELECT * FROM raw_sms WHERE address = :address AND date BETWEEN :from AND :to " +
-            "ORDER BY date DESC LIMIT 20"
+            "ORDER BY ABS(date - :anchor) LIMIT 20"
     )
-    fun messagesFor(address: String, from: Long, to: Long): List<RawSmsEntity>
+    fun messagesFor(address: String, from: Long, to: Long, anchor: Long): List<RawSmsEntity>
 }
 
 @Dao
@@ -35,6 +38,9 @@ interface TransactionDao {
 
     @Query("SELECT COUNT(*) FROM transactions")
     fun count(): Int
+
+    @Query("DELETE FROM transactions")
+    fun deleteAll()
 }
 
 @Dao

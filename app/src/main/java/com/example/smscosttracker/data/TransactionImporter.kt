@@ -29,24 +29,53 @@ class TransactionImporter(
             ).size
 
             val parsed = messages.mapNotNull { parser.parse(it) }
-            val existing = database.transactionDao().getAll()
-            val accepted = Deduplicator.dedupe(parsed, existing)
-            val classifier = CategoryClassifier(
-                corrections = database.categoryCorrectionDao().getAll()
-                    .associate { it.merchantKey to it.category }
+            ImportResult(
+                rawInserted = rawInserted,
+                parsed = parsed.size,
+                stored = store(parsed)
             )
-            accepted.forEach { candidate ->
-                database.transactionDao().insert(
-                    TransactionEntity(
-                        amountMinor = candidate.amountMinor,
-                        currency = candidate.currency,
-                        merchant = candidate.merchant,
-                        occurredAt = candidate.occurredAt,
-                        sourceAddress = candidate.sourceAddress,
-                        category = classifier.classify(candidate.merchant).displayName
+        })
+
+    fun rebuildFromStored(): ImportResult =
+        database.runInTransaction(Callable {
+            val stored = database.rawSmsDao().getAll()
+            database.transactionDao().deleteAll()
+            val parsed = stored.mapNotNull {
+                parser.parse(
+                    RawSms(
+                        address = it.address,
+                        body = it.body,
+                        date = it.date,
+                        threadId = it.threadId
                     )
                 )
             }
-            ImportResult(rawInserted = rawInserted, parsed = parsed.size, stored = accepted.size)
+            ImportResult(
+                rawInserted = stored.size,
+                parsed = parsed.size,
+                stored = store(parsed)
+            )
         })
+
+    private fun store(parsed: List<ParsedTransaction>): Int {
+        val existing = database.transactionDao().getAll()
+        val accepted = Deduplicator.dedupe(parsed, existing)
+        val classifier = CategoryClassifier(
+            corrections = database.categoryCorrectionDao().getAll()
+                .associate { it.merchantKey to it.category }
+        )
+        accepted.forEach { candidate ->
+            database.transactionDao().insert(
+                TransactionEntity(
+                    amountMinor = candidate.amountMinor,
+                    currency = candidate.currency,
+                    merchant = candidate.merchant,
+                    occurredAt = candidate.occurredAt,
+                    sourceAddress = candidate.sourceAddress,
+                    category = classifier.classify(candidate.merchant).displayName
+                )
+            )
+        }
+        return accepted.size
+    }
 }

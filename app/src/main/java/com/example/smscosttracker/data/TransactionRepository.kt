@@ -13,7 +13,8 @@ class TransactionRepository(private val database: AppDatabase) {
         return database.rawSmsDao().messagesFor(
             address = transaction.sourceAddress,
             from = transaction.occurredAt - window,
-            to = transaction.occurredAt + window
+            to = transaction.occurredAt + window,
+            anchor = transaction.occurredAt
         )
     }
 
