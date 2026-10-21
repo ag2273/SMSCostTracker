@@ -109,4 +109,23 @@ class SpendingAnalysisTest {
         assertEquals("Amazon", summary.topMerchants.first().merchant)
         assertEquals(3000L, summary.topMerchants.first().amountMinor)
     }
+
+    @Test
+    fun `splits summaries per currency instead of adding them`() {
+        val summaries = SpendingAnalysis.summarizeByCurrency(
+            listOf(
+                transaction(1000L, Category.SHOPPING, "Amazon", LocalDate.of(2026, 10, 1)),
+                transaction(2000L, Category.SHOPPING, "Noon", LocalDate.of(2026, 10, 2))
+                    .copy(currency = "USD")
+            ),
+            zone
+        )
+
+        assertEquals(2, summaries.size)
+        assertEquals(2000L, summaries[0].totalMinor)
+        assertEquals("USD", summaries[0].currency)
+        assertEquals(1000L, summaries[1].totalMinor)
+        assertEquals("EGP", summaries[1].currency)
+    }
+
 }

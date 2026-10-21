@@ -22,6 +22,18 @@ data class SpendingSummary(
 object SpendingAnalysis {
     const val MAX_MONTHS = 12
 
+    fun summarizeByCurrency(
+        transactions: List<TransactionEntity>,
+        zone: ZoneId = ZoneId.systemDefault(),
+        maxMonths: Int = MAX_MONTHS,
+        topMerchantCount: Int = 5
+    ): List<SpendingSummary> =
+        transactions.groupBy { it.currency }
+            .map { (_, rows) ->
+                summarize(rows, zone, maxMonths, topMerchantCount)
+            }
+            .sortedByDescending { it.totalMinor }
+
     fun summarize(
         transactions: List<TransactionEntity>,
         zone: ZoneId = ZoneId.systemDefault(),

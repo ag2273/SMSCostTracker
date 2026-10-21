@@ -26,7 +26,9 @@ object TransactionParser {
     )
     private val nonTransaction = Regex(
         "(?i)\\b(otp|one[- ]time password|verification code|declined|failed|not processed|" +
-            "between your accounts|between own accounts|internal transfer)\\b"
+            "between your accounts|between own accounts|internal transfer|" +
+            "credit card\\s*:\\s*payment|credit card payment|card\\s*:\\s*payment|" +
+            "card repayment|payment to (?:your )?(?:credit )?card)\\b"
     )
     private val creditOrRefund = Regex(
         "(?i)\\b(refund|refunded|credited|credit transfer|deposited|deposit received|" +
@@ -211,6 +213,13 @@ object TransactionParser {
             val cleaned = raw
                 .replace(Regex("\\s+on\\s+.*$", RegexOption.IGNORE_CASE), "")
                 .replace(Regex("\\s+\\d+.*$"), "")
+                .replace(
+                    Regex(
+                        "\\s+for\\s+(?:SAR|EGP|AED|USD|ريال|جنيه|درهم)\\s*$",
+                        RegexOption.IGNORE_CASE
+                    ),
+                    ""
+                )
                 .trim()
                 .trim('.', ',', '-')
             if (cleaned.length >= 2 &&

@@ -19,6 +19,7 @@ data class TransactionFilterState(
     val preset: DatePreset = DatePreset.ALL,
     val category: Category? = null,
     val account: String? = null,
+    val currency: String? = null,
     val merchantQuery: String = "",
     val customStart: LocalDate? = null,
     val customEnd: LocalDate? = null
@@ -38,9 +39,10 @@ object TransactionFilters {
             val inCategory = state.category == null ||
                 Category.fromStorage(transaction.category) == state.category
             val inAccount = state.account == null || transaction.account == state.account
+            val inCurrency = state.currency == null || transaction.currency == state.currency
             val matchesMerchant = state.merchantQuery.isBlank() ||
                 transaction.merchant.contains(state.merchantQuery.trim(), ignoreCase = true)
-            inRange && inCategory && inAccount && matchesMerchant
+            inRange && inCategory && inAccount && inCurrency && matchesMerchant
         }
     }
 

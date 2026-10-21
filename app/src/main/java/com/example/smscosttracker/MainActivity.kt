@@ -451,9 +451,17 @@ private fun TransactionsScreen(repository: TransactionRepository, refreshKey: In
     val accounts = remember(state.transactions) {
         state.transactions.map { it.account }.filter { it.isNotBlank() }.distinct().sorted()
     }
+    val currencies = remember(state.transactions) {
+        state.transactions.map { it.currency }.filter { it.isNotBlank() }.distinct().sorted()
+    }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        FilterBar(filter = filter, accounts = accounts, onChange = { filter = it })
+        FilterBar(
+            filter = filter,
+            accounts = accounts,
+            currencies = currencies,
+            onChange = { filter = it }
+        )
         if (state.loading) {
             CircularProgressIndicator(modifier = Modifier.padding(top = 12.dp))
         } else if (filtered.isEmpty()) {
@@ -500,14 +508,21 @@ private fun ChartsScreen(repository: TransactionRepository, refreshKey: Int) {
     var filter by remember { mutableStateOf(TransactionFilterState()) }
     val state = rememberTransactions(repository, refreshKey)
     val filtered = TransactionFilters.apply(state.transactions, filter)
-    val summary = remember(state.transactions, filter) { SpendingAnalysis.summarize(filtered) }
-    val currency = summary.currency.ifBlank { "EGP" }
+    val summaries = remember(filtered) { SpendingAnalysis.summarizeByCurrency(filtered) }
     val accounts = remember(state.transactions) {
         state.transactions.map { it.account }.filter { it.isNotBlank() }.distinct().sorted()
     }
+    val currencies = remember(state.transactions) {
+        state.transactions.map { it.currency }.filter { it.isNotBlank() }.distinct().sorted()
+    }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        FilterBar(filter = filter, accounts = accounts, onChange = { filter = it })
+        FilterBar(
+            filter = filter,
+            accounts = accounts,
+            currencies = currencies,
+            onChange = { filter = it }
+        )
         if (state.loading) {
             CircularProgressIndicator(modifier = Modifier.padding(top = 12.dp))
         } else if (filtered.isEmpty()) {
@@ -518,26 +533,37 @@ private fun ChartsScreen(repository: TransactionRepository, refreshKey: Int) {
                 verticalArrangement = Arrangement.spacedBy(24.dp)
             ) {
                 item {
-                    Text(
-                        "Total: ${formatAmount(summary.totalMinor, currency)}",
-                        style = MaterialTheme.typography.titleLarge
-                    )
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        summaries.forEach { summary ->
+                            Text(
+                                "Total: ${formatAmount(
+                                    summary.totalMinor,
+                                    summary.currency.ifBlank { "?" }
+                                )}",
+                                style = MaterialTheme.typography.titleLarge
+                            )
+                        }
+                    }
                 }
-                item {
-                    SectionTitle("Spending by category")
-                    CategoryPieChart(summary.byCategory, currency)
-                }
-                item {
-                    SectionTitle("Spending by account")
-                    AccountList(summary.byAccount, currency)
-                }
-                item {
-                    SectionTitle("Monthly trend")
-                    MonthlyBarChart(summary.byMonth, currency)
-                }
-                item {
-                    SectionTitle("Top merchants")
-                    TopMerchants(summary.topMerchants, currency)
+                summaries.forEach { summary ->
+                    val currency = summary.currency.ifBlank { "?" }
+                    val prefix = if (summaries.size > 1) "$currency · " else ""
+                    item {
+                        SectionTitle("${prefix}Spending by category")
+                        CategoryPieChart(summary.byCategory, currency)
+                    }
+                    item {
+                        SectionTitle("${prefix}Spending by account")
+                        AccountList(summary.byAccount, currency)
+                    }
+                    item {
+                        SectionTitle("${prefix}Monthly trend")
+                        MonthlyBarChart(summary.byMonth, currency)
+                    }
+                    item {
+                        SectionTitle("${prefix}Top merchants")
+                        TopMerchants(summary.topMerchants, currency)
+                    }
                 }
             }
         }
@@ -686,6 +712,7 @@ private val chartColors = listOf(
 private fun FilterBar(
     filter: TransactionFilterState,
     accounts: List<String>,
+    currencies: List<String>,
     onChange: (TransactionFilterState) -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -714,6 +741,15 @@ private fun FilterBar(
                 onSelect = { account ->
                     onChange(
                         filter.copy(account = account.takeUnless { it == "All accounts" })
+                    )
+                }
+            )
+            Dropdown(
+                label = filter.currency ?: "All currencies",
+                options = listOf("All currencies") + currencies,
+                onSelect = { currency ->
+                    onChange(
+                        filter.copy(currency = currency.takeUnless { it == "All currencies" })
                     )
                 }
             )

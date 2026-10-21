@@ -180,4 +180,23 @@ class TransactionFiltersTest {
 
         assertEquals(1, result.size)
     }
+
+    @Test
+    fun `currency filter isolates one currency`() {
+        val transactions = listOf(
+            transaction(),
+            transaction().copy(currency = "USD")
+        )
+
+        val result = TransactionFilters.apply(
+            transactions,
+            TransactionFilterState(currency = "EGP"),
+            now,
+            zone
+        )
+
+        assertEquals(1, result.size)
+        assertEquals("EGP", result.single().currency)
+    }
+
 }

@@ -275,4 +275,39 @@ class TransactionParserTest {
             TransactionParser.candidates("Account: 154313")
         )
     }
+
+    @Test
+    fun `ignores credit card payments`() {
+        assertNull(
+            TransactionParser.parse(
+                message(
+                    "Credit Card: Payment\nCard: ***0542;MASTER\n" +
+                        "Amount: SAR 7,635.29\nFrom: ***001\nDate: 2026-09-22 09:53:07"
+                )
+            )
+        )
+    }
+
+    @Test
+    fun `keeps credit card purchases`() {
+        val parsed = TransactionParser.parse(
+            message(
+                "Credit Card: Purchase\nCard: ***0542;MASTER\n" +
+                    "Amount: SAR 50.00\nAt: CARREFOUR\nDate: 2026-09-22 10:00:00"
+            )
+        )!!
+
+        assertEquals(5000L, parsed.amountMinor)
+        assertEquals("BANK 0542", parsed.account)
+    }
+
+
+    @Test
+    fun `strips trailing currency phrase from merchant`() {
+        val parsed = TransactionParser.parse(
+            message("Purchase at Amazon Now for SAR 51.59 on 2026-09-01 10:00:00")
+        )!!
+
+        assertEquals("Amazon Now", parsed.merchant)
+    }
 }
