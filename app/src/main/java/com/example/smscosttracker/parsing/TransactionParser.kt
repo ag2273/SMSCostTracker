@@ -51,9 +51,10 @@ object TransactionParser {
         Regex("\\b(\\d{1,2}-(\\d{1,2})-(\\d{4}))\\b") to DateTimeFormatter.ofPattern("d-M-yyyy")
     )
     private val accountPatterns = listOf(
-        Regex("(?i)\\bfrom:\\s*[*xX#]*([0-9]{2,6})"),
-        Regex("(?i)\\b(?:account|a/c|acct|card)[^0-9]{0,20}[*xX#]*([0-9]{2,6})"),
-        Regex("\\(\\s*([0-9]{3,6})\\s*\\)")
+        Regex("(?i)\\b(?:card|account|a/c|acct)[^0-9]{0,20}[*xX#]*([0-9]{2,6})"),
+        Regex("(?i)\\bfrom\\s*:?\\s*\\(?\\s*[*xX#]*([0-9]{2,6})\\s*\\)?"),
+        Regex("(?i)\\*{2,}\\s*([0-9]{3,6})"),
+        Regex("(?i)\\b(?:by|to)\\s*:?\\s*[*xX#]*([0-9]{2,6})")
     )
 
     fun parse(message: RawSms, defaultCurrency: String = "EGP"): ParsedTransaction? {
@@ -86,7 +87,7 @@ object TransactionParser {
         if (lines.isEmpty()) return null
 
         val hinted = lines.filter { transactionHint.containsMatchIn(it) }
-        val candidates = if (hinted.isNotEmpty()) hinted else lines
+        val candidates = hinted + lines.filterNot { transactionHint.containsMatchIn(it) }
         for (line in candidates) {
             val currencyMatch = currencyFirst.find(line) ?: currencyLast.find(line)
             if (currencyMatch != null) {

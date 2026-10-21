@@ -140,11 +140,25 @@ class TransactionParserTest {
     }
 
     @Test
-    fun `extracts card account`() {
+    fun `extracts card account over funding account`() {
         val parsed = TransactionParser.parse(
-            message("Purchase of SAR 10.00 at Pharmacy on card (0542)")
+            message(
+                "PoS Purchase\nSAB mada(Google Pay) Card (1214) from (***001) was used at " +
+                    "CITY FRESH KITCHEN for SAR 98.00 on 2026-09-10 13:18:37."
+            )
         )!!
 
-        assertEquals("BANK 0542", parsed.account)
+        assertEquals("BANK 1214", parsed.account)
+    }
+
+    @Test
+    fun `extracts masked card from online purchase`() {
+        val parsed = TransactionParser.parse(
+            message(
+                "Online Purchase\nBy: ***1214;mada\nfor SAR 181.00 on 2026-09-10 20:22:00"
+            )
+        )!!
+
+        assertEquals("BANK 1214", parsed.account)
     }
 }
