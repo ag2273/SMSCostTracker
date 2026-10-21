@@ -116,5 +116,35 @@ class TransactionParserTest {
 
         assertEquals(1000000L, parsed.amountMinor)
         assertEquals("SAR", parsed.currency)
+        assertEquals("BANK 3060", parsed.account)
+    }
+
+    @Test
+    fun `ignores transfers between own accounts`() {
+        assertNull(
+            TransactionParser.parse(
+                message(
+                    "Debit transfer: Between Your Accounts\nFrom: ***001\n" +
+                        "Amount: SAR 15,000.00\nTo: ***060\nDate: 2026-09-22 09:53:49"
+                )
+            )
+        )
+        assertNull(
+            TransactionParser.parse(
+                message(
+                    "Credit transfer: Between Your Accounts\nFrom: ***001\n" +
+                        "Amount: SAR 15,000.00\nTo: ***060\nDate: 2026-09-22 09:53:49"
+                )
+            )
+        )
+    }
+
+    @Test
+    fun `extracts card account`() {
+        val parsed = TransactionParser.parse(
+            message("Purchase of SAR 10.00 at Pharmacy on card (0542)")
+        )!!
+
+        assertEquals("BANK 0542", parsed.account)
     }
 }

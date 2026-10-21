@@ -9,10 +9,12 @@ import java.time.ZoneId
 data class CategoryTotal(val category: Category, val amountMinor: Long)
 data class MonthlyTotal(val month: YearMonth, val amountMinor: Long)
 data class MerchantTotal(val merchant: String, val amountMinor: Long)
+data class AccountTotal(val account: String, val amountMinor: Long)
 data class SpendingSummary(
     val totalMinor: Long,
     val currency: String,
     val byCategory: List<CategoryTotal>,
+    val byAccount: List<AccountTotal>,
     val byMonth: List<MonthlyTotal>,
     val topMerchants: List<MerchantTotal>
 )
@@ -38,6 +40,10 @@ object SpendingAnalysis {
             .map { (merchant, amount) -> MerchantTotal(merchant, amount) }
             .take(topMerchantCount)
 
+        val byAccount = transactions
+            .totalsBy { it.account.ifBlank { "Unknown account" } }
+            .map { (account, amount) -> AccountTotal(account, amount) }
+
         val months = transactions.map {
             YearMonth.from(Instant.ofEpochMilli(it.occurredAt).atZone(zone))
         }
@@ -62,6 +68,7 @@ object SpendingAnalysis {
             totalMinor = transactions.sumOf { it.amountMinor },
             currency = transactions.firstOrNull()?.currency ?: "",
             byCategory = byCategory,
+            byAccount = byAccount,
             byMonth = byMonth,
             topMerchants = topMerchants
         )

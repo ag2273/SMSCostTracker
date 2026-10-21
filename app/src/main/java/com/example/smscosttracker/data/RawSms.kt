@@ -12,5 +12,6 @@ data class ParsedTransaction(
     val currency: String,
     val merchant: String,
     val occurredAt: Long,
-    val sourceAddress: String
+    val sourceAddress: String,
+    val account: String = ""
 )

@@ -72,7 +72,8 @@ class TransactionImporter(
                     merchant = candidate.merchant,
                     occurredAt = candidate.occurredAt,
                     sourceAddress = candidate.sourceAddress,
-                    category = classifier.classify(candidate.merchant).displayName
+                    category = classifier.classify(candidate.merchant).displayName,
+                    account = candidate.account
                 )
             )
         }

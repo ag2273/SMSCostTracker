@@ -55,6 +55,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import com.example.smscosttracker.analysis.AccountTotal
 import com.example.smscosttracker.analysis.CategoryTotal
 import com.example.smscosttracker.analysis.DatePreset
 import com.example.smscosttracker.analysis.MerchantTotal
@@ -320,9 +321,12 @@ private fun TransactionsScreen(repository: TransactionRepository, refreshKey: In
     var detail by remember { mutableStateOf<TransactionEntity?>(null) }
     val state = rememberTransactions(repository, refreshKey)
     val filtered = TransactionFilters.apply(state.transactions, filter)
+    val accounts = remember(state.transactions) {
+        state.transactions.map { it.account }.filter { it.isNotBlank() }.distinct().sorted()
+    }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        FilterBar(filter = filter, onChange = { filter = it })
+        FilterBar(filter = filter, accounts = accounts, onChange = { filter = it })
         if (state.loading) {
             CircularProgressIndicator(modifier = Modifier.padding(top = 12.dp))
         } else if (filtered.isEmpty()) {
@@ -367,9 +371,12 @@ private fun ChartsScreen(repository: TransactionRepository, refreshKey: Int) {
     val filtered = TransactionFilters.apply(state.transactions, filter)
     val summary = remember(state.transactions, filter) { SpendingAnalysis.summarize(filtered) }
     val currency = summary.currency.ifBlank { "EGP" }
+    val accounts = remember(state.transactions) {
+        state.transactions.map { it.account }.filter { it.isNotBlank() }.distinct().sorted()
+    }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        FilterBar(filter = filter, onChange = { filter = it })
+        FilterBar(filter = filter, accounts = accounts, onChange = { filter = it })
         if (state.loading) {
             CircularProgressIndicator(modifier = Modifier.padding(top = 12.dp))
         } else if (filtered.isEmpty()) {
@@ -388,6 +395,10 @@ private fun ChartsScreen(repository: TransactionRepository, refreshKey: Int) {
                 item {
                     SectionTitle("Spending by category")
                     CategoryPieChart(summary.byCategory, currency)
+                }
+                item {
+                    SectionTitle("Spending by account")
+                    AccountList(summary.byAccount, currency)
                 }
                 item {
                     SectionTitle("Monthly trend")
@@ -504,6 +515,21 @@ private fun TopMerchants(merchants: List<MerchantTotal>, currency: String) {
     }
 }
 
+@Composable
+private fun AccountList(accounts: List<AccountTotal>, currency: String) {
+    Column {
+        accounts.forEach { account ->
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(account.account, modifier = Modifier.weight(1f))
+                Text(formatAmount(account.amountMinor, currency))
+            }
+        }
+    }
+}
+
 private fun formatAmount(amountMinor: Long, currency: String): String =
     String.format(Locale.US, "%.2f %s", amountMinor / 100.0, currency)
 
@@ -528,6 +554,7 @@ private val chartColors = listOf(
 @Composable
 private fun FilterBar(
     filter: TransactionFilterState,
+    accounts: List<String>,
     onChange: (TransactionFilterState) -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -546,6 +573,17 @@ private fun FilterBar(
                 onSelect = { label ->
                     val category = Category.entries.firstOrNull { it.displayName == label }
                     onChange(filter.copy(category = category))
+                }
+            )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Dropdown(
+                label = filter.account ?: "All accounts",
+                options = listOf("All accounts") + accounts,
+                onSelect = { account ->
+                    onChange(
+                        filter.copy(account = account.takeUnless { it == "All accounts" })
+                    )
                 }
             )
         }

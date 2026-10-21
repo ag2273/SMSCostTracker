@@ -18,6 +18,7 @@ enum class DatePreset(val label: String) {
 data class TransactionFilterState(
     val preset: DatePreset = DatePreset.ALL,
     val category: Category? = null,
+    val account: String? = null,
     val merchantQuery: String = "",
     val customStart: LocalDate? = null,
     val customEnd: LocalDate? = null
@@ -36,9 +37,10 @@ object TransactionFilters {
                 (transaction.occurredAt >= range.first && transaction.occurredAt < range.second)
             val inCategory = state.category == null ||
                 Category.fromStorage(transaction.category) == state.category
+            val inAccount = state.account == null || transaction.account == state.account
             val matchesMerchant = state.merchantQuery.isBlank() ||
                 transaction.merchant.contains(state.merchantQuery.trim(), ignoreCase = true)
-            inRange && inCategory && matchesMerchant
+            inRange && inCategory && inAccount && matchesMerchant
         }
     }
 

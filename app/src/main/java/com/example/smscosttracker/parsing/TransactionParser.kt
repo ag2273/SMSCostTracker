@@ -23,11 +23,12 @@ object TransactionParser {
             "[^0-9]{0,20}([0-9][0-9,]*(?:\\.[0-9]{1,2})?)"
     )
     private val nonTransaction = Regex(
-        "(?i)\\b(otp|one[- ]time password|verification code|declined|failed|not processed)\\b"
+        "(?i)\\b(otp|one[- ]time password|verification code|declined|failed|not processed|" +
+            "between your accounts|between own accounts|internal transfer)\\b"
     )
     private val creditOrRefund = Regex(
-        "(?i)\\b(refund|refunded|credited|deposited|deposit received|deposit of|salary|" +
-            "cashback|reversal|reversed|received from|incoming transfer)\\b"
+        "(?i)\\b(refund|refunded|credited|credit transfer|deposited|deposit received|" +
+            "deposit of|salary|cashback|reversal|reversed|received from|incoming transfer)\\b"
     )
     private val balanceLine = Regex(
         "(?i)\\b(available balance|current balance|balance|credit limit|available limit|" +
@@ -49,6 +50,11 @@ object TransactionParser {
         Regex("\\b(\\d{1,2}/(\\d{1,2})/(\\d{4}))\\b") to DateTimeFormatter.ofPattern("d/M/yyyy"),
         Regex("\\b(\\d{1,2}-(\\d{1,2})-(\\d{4}))\\b") to DateTimeFormatter.ofPattern("d-M-yyyy")
     )
+    private val accountPatterns = listOf(
+        Regex("(?i)\\bfrom:\\s*[*xX#]*([0-9]{2,6})"),
+        Regex("(?i)\\b(?:account|a/c|acct|card)[^0-9]{0,20}[*xX#]*([0-9]{2,6})"),
+        Regex("\\(\\s*([0-9]{3,6})\\s*\\)")
+    )
 
     fun parse(message: RawSms, defaultCurrency: String = "EGP"): ParsedTransaction? {
         val body = message.body
@@ -60,8 +66,17 @@ object TransactionParser {
             currency = amount.second,
             merchant = extractMerchant(body),
             occurredAt = extractDate(body, message.date),
-            sourceAddress = message.address
+            sourceAddress = message.address,
+            account = extractAccount(body, message.address)
         )
+    }
+
+    private fun extractAccount(body: String, sender: String): String {
+        for (pattern in accountPatterns) {
+            val digits = pattern.find(body)?.groupValues?.get(1)?.trim() ?: continue
+            if (digits.isNotEmpty()) return "$sender $digits"
+        }
+        return sender
     }
 
     private fun extractAmount(body: String, defaultCurrency: String): Pair<Long, String>? {

@@ -20,7 +20,8 @@ data class TransactionEntity(
     val merchant: String,
     val occurredAt: Long,
     val sourceAddress: String,
-    val category: String
+    val category: String,
+    val account: String = ""
 )
 
 @Entity(tableName = "category_corrections")

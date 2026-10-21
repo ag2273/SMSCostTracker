@@ -15,14 +15,16 @@ class SpendingAnalysisTest {
         amount: Long,
         category: Category,
         merchant: String,
-        date: LocalDate
+        date: LocalDate,
+        account: String = "SAB 001"
     ) = TransactionEntity(
         amountMinor = amount,
         currency = "EGP",
         merchant = merchant,
         occurredAt = date.atStartOfDay(zone).toInstant().toEpochMilli(),
         sourceAddress = "BANK",
-        category = category.displayName
+        category = category.displayName,
+        account = account
     )
 
     @Test
@@ -74,6 +76,21 @@ class SpendingAnalysisTest {
         assertEquals(YearMonth.of(2026, 8), summary.byMonth.first().month)
         assertEquals(2000L, summary.byMonth.first().amountMinor)
         assertEquals(0L, summary.byMonth[1].amountMinor)
+    }
+
+    @Test
+    fun `splits totals per account`() {
+        val summary = SpendingAnalysis.summarize(
+            listOf(
+                transaction(1000L, Category.GROCERIES, "Carrefour", LocalDate.of(2026, 10, 1), "SAB 001"),
+                transaction(3000L, Category.GROCERIES, "Panda", LocalDate.of(2026, 10, 2), "SAB 060")
+            ),
+            zone
+        )
+
+        assertEquals(2, summary.byAccount.size)
+        assertEquals("SAB 060", summary.byAccount.first().account)
+        assertEquals(3000L, summary.byAccount.first().amountMinor)
     }
 
     @Test
