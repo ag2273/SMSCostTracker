@@ -64,6 +64,7 @@ import com.example.smscosttracker.ui.components.ReviewBanner
 import com.example.smscosttracker.ui.components.ScreenBackground
 import com.example.smscosttracker.ui.components.SectionRow
 import com.example.smscosttracker.ui.components.channelLabel
+import com.example.smscosttracker.ui.components.formatExpenseMoney
 import com.example.smscosttracker.ui.components.formatMoney
 import com.example.smscosttracker.ui.theme.Ledger
 import com.example.smscosttracker.ui.theme.LedgerChartColors
@@ -363,6 +364,8 @@ private fun SpendHero(
 @Composable
 private fun RecentRow(transaction: TransactionEntity, onClick: () -> Unit) {
     val channel = TransactionChannel.fromStorage(transaction.channel)
+    val digits = transaction.account.substringAfterLast(' ').trim().takeIf { it.isNotBlank() }
+    val instrument = listOfNotNull(channelLabel(channel), digits).joinToString(" ")
     val date = Instant.ofEpochMilli(transaction.occurredAt)
         .atZone(ZoneId.systemDefault())
         .toLocalDate()
@@ -378,7 +381,8 @@ private fun RecentRow(transaction: TransactionEntity, onClick: () -> Unit) {
     ) {
         Avatar(
             letter = transaction.merchant,
-            color = LedgerChartColors[(transaction.merchant.hashCode() and Int.MAX_VALUE) % LedgerChartColors.size]
+            color = LedgerChartColors[(transaction.merchant.hashCode() and Int.MAX_VALUE) % LedgerChartColors.size],
+            size = 38
         )
         Column(modifier = Modifier.weight(1f)) {
             Text(
@@ -387,24 +391,24 @@ private fun RecentRow(transaction: TransactionEntity, onClick: () -> Unit) {
                 color = Ledger.Ink,
                 maxLines = 1
             )
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                 Text(
                     Category.fromStorage(transaction.category).displayName,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Ledger.Muted
+                    style = MaterialTheme.typography.labelMedium,
+                    color = Ledger.Ink.copy(alpha = 0.85f)
                 )
-                Text("·", style = MaterialTheme.typography.labelSmall, color = Ledger.Muted)
-                ChannelIcon(channel)
+                Text("·", style = MaterialTheme.typography.labelMedium, color = Ledger.Muted)
+                ChannelIcon(channel, size = 14)
                 Text(
-                    channelLabel(channel),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Ledger.Muted
+                    instrument,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = Ledger.Ink
                 )
             }
         }
         Column(horizontalAlignment = Alignment.End) {
             Text(
-                formatMoney(transaction.amountMinor, transaction.currency),
+                formatExpenseMoney(transaction.amountMinor, transaction.currency),
                 style = MaterialTheme.typography.titleSmall,
                 color = Ledger.Ink
             )

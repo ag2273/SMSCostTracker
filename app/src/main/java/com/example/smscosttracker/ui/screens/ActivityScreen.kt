@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material.icons.outlined.Search
@@ -51,12 +50,14 @@ import com.example.smscosttracker.ui.components.DropdownChip
 import com.example.smscosttracker.ui.components.EmptyState
 import com.example.smscosttracker.ui.components.LedgerChip
 import com.example.smscosttracker.ui.components.LedgerDivider
+import com.example.smscosttracker.ui.components.LedgerCard
 import com.example.smscosttracker.ui.components.LedgerTextField
 import com.example.smscosttracker.ui.components.PageHeader
 import com.example.smscosttracker.ui.components.Pill
 import com.example.smscosttracker.ui.components.PillTone
 import com.example.smscosttracker.ui.components.ScreenBackground
 import com.example.smscosttracker.ui.components.channelLabel
+import com.example.smscosttracker.ui.components.formatExpenseMoney
 import com.example.smscosttracker.ui.components.formatMoney
 import com.example.smscosttracker.ui.components.rememberCsvExport
 import com.example.smscosttracker.ui.sheets.CategorySheet
@@ -211,18 +212,29 @@ fun ActivityScreen(
                     modifier = Modifier.padding(top = 20.dp)
                 )
             } else {
-                LazyColumn(modifier = Modifier.weight(1f)) {
+                LazyColumn(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
                     grouped.forEach { (date, rows) ->
-                        item(key = "header-${date}") {
-                            DateGroupHeader(date = date, rows = rows)
-                        }
-                        items(rows, key = { it.id }) { transaction ->
-                            ActivityRow(
-                                transaction = transaction,
-                                isPending = transaction.isPending(pendingKeys),
-                                onClick = { detail = transaction }
-                            )
-                            LedgerDivider(modifier = Modifier.padding(start = 56.dp))
+                        item(key = "group-${date}") {
+                            Column {
+                                DateGroupHeader(date = date, rows = rows)
+                                LedgerCard {
+                                    Column {
+                                        rows.forEachIndexed { index, transaction ->
+                                            ActivityRow(
+                                                transaction = transaction,
+                                                isPending = transaction.isPending(pendingKeys),
+                                                onClick = { detail = transaction }
+                                            )
+                                            if (index != rows.lastIndex) {
+                                                LedgerDivider(modifier = Modifier.padding(start = 62.dp))
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                     item { Spacer(Modifier.height(16.dp)) }
@@ -329,17 +341,20 @@ private fun ActivityRow(
     onClick: () -> Unit
 ) {
     val channel = TransactionChannel.fromStorage(transaction.channel)
+    val digits = transaction.account.substringAfterLast(' ').trim().takeIf { it.isNotBlank() }
+    val instrument = listOfNotNull(channelLabel(channel), digits).joinToString(" ")
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(horizontal = 2.dp, vertical = 11.dp),
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
+        horizontalArrangement = Arrangement.spacedBy(11.dp)
     ) {
         Avatar(
             letter = transaction.merchant,
-            color = LedgerChartColors[(transaction.merchant.hashCode() and Int.MAX_VALUE) % LedgerChartColors.size]
+            color = LedgerChartColors[(transaction.merchant.hashCode() and Int.MAX_VALUE) % LedgerChartColors.size],
+            size = 38
         )
         Column(modifier = Modifier.weight(1f)) {
             Text(
@@ -351,27 +366,20 @@ private fun ActivityRow(
             )
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                horizontalArrangement = Arrangement.spacedBy(5.dp)
             ) {
                 Text(
                     Category.fromStorage(transaction.category).displayName,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Ledger.Muted
+                    style = MaterialTheme.typography.labelMedium,
+                    color = Ledger.Ink.copy(alpha = 0.85f)
                 )
-                Text("·", style = MaterialTheme.typography.labelSmall, color = Ledger.Muted)
-                ChannelIcon(channel)
+                Text("·", style = MaterialTheme.typography.labelMedium, color = Ledger.Muted)
+                ChannelIcon(channel, size = 14)
                 Text(
-                    channelLabel(channel),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Ledger.Muted
+                    instrument,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = Ledger.Ink
                 )
-                if (transaction.account.isNotBlank()) {
-                    Text(
-                        "· ${transaction.account.substringAfterLast(' ')}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Ledger.Muted
-                    )
-                }
                 if (isPending) {
                     Pill("Review", PillTone.Accent)
                 }
@@ -379,7 +387,7 @@ private fun ActivityRow(
         }
         Column(horizontalAlignment = Alignment.End) {
             Text(
-                formatMoney(transaction.amountMinor, transaction.currency),
+                formatExpenseMoney(transaction.amountMinor, transaction.currency),
                 style = MaterialTheme.typography.titleSmall,
                 color = Ledger.Ink
             )

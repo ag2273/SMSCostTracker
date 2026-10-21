@@ -79,6 +79,7 @@ import com.example.smscosttracker.sms.SmsReader
 import com.example.smscosttracker.sms.SmsThread
 import com.example.smscosttracker.ui.components.ChoiceRow
 import com.example.smscosttracker.ui.components.EmptyState
+import com.example.smscosttracker.ui.components.IconTile
 import com.example.smscosttracker.ui.components.LedgerCard
 import com.example.smscosttracker.ui.components.LedgerDivider
 import com.example.smscosttracker.ui.components.LedgerTextButton
@@ -156,8 +157,17 @@ fun SettingsScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp, vertical = 14.dp)
         ) {
-            PageHeader("Settings", "Local-first controls")
+            PageHeader("Settings", "On this device")
             Spacer(Modifier.height(16.dp))
+
+            if (!stats.loading && stats.pendingInstruments > 0) {
+                ReviewBanner(
+                    title = "${stats.pendingInstruments} card/account values need review",
+                    body = "Confirm them to improve your totals.",
+                    onClick = onOpenInstruments
+                )
+                Spacer(Modifier.height(16.dp))
+            }
 
             SectionLabel("IMPORT")
             LedgerCard {
@@ -260,12 +270,7 @@ fun SettingsScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Icon(
-                            Icons.Outlined.Check,
-                            contentDescription = null,
-                            tint = Ledger.Primary,
-                            modifier = Modifier.size(18.dp)
-                        )
+                        IconTile(Icons.Outlined.Check)
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 "Onboarding",
@@ -302,9 +307,9 @@ private fun StatRow(icon: ImageVector, label: String, value: String) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 13.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
+        horizontalArrangement = Arrangement.spacedBy(11.dp)
     ) {
-        Icon(icon, contentDescription = null, tint = Ledger.Primary, modifier = Modifier.size(18.dp))
+        IconTile(icon)
         Text(label, modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleSmall, color = Ledger.Ink)
         Text(value, style = MaterialTheme.typography.labelMedium, color = Ledger.Muted)
     }

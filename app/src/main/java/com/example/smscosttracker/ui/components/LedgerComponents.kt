@@ -333,7 +333,7 @@ fun Avatar(
 }
 
 @Composable
-fun ChannelIcon(channel: TransactionChannel, modifier: Modifier = Modifier) {
+fun ChannelIcon(channel: TransactionChannel, modifier: Modifier = Modifier, size: Int = 13) {
     Icon(
         imageVector = if (channel == TransactionChannel.CARD) {
             Icons.Outlined.CreditCard
@@ -341,9 +341,27 @@ fun ChannelIcon(channel: TransactionChannel, modifier: Modifier = Modifier) {
             Icons.Outlined.AccountBalance
         },
         contentDescription = null,
-        modifier = modifier.size(13.dp),
+        modifier = modifier.size(size.dp),
         tint = Ledger.Muted
     )
+}
+
+@Composable
+fun IconTile(icon: ImageVector, modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .size(32.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(Ledger.SurfaceAlt),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            icon,
+            contentDescription = null,
+            tint = Ledger.Ink,
+            modifier = Modifier.size(18.dp)
+        )
+    }
 }
 
 @Composable
@@ -400,12 +418,13 @@ fun SelectRow(
     trailing: String? = null
 ) {
     Row(
-        modifier = modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 13.dp),
+        modifier = modifier.fillMaxWidth().clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 13.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         if (icon != null) {
-            Icon(icon, contentDescription = null, tint = Ledger.Primary, modifier = Modifier.size(18.dp))
+            IconTile(icon)
         }
         Column(modifier = Modifier.weight(1f)) {
             Text(label, style = MaterialTheme.typography.titleSmall, color = Ledger.Ink)
@@ -603,6 +622,9 @@ fun formatMoney(amountMinor: Long, currency: String): String {
     val code = currency.ifBlank { "?" }
     return "$code ${formatter.format(amountMinor / 100.0)}"
 }
+
+fun formatExpenseMoney(amountMinor: Long, currency: String): String =
+    "−" + formatMoney(amountMinor, currency)
 
 fun formatCompactMoney(amountMinor: Long, currency: String): String {
     val value = amountMinor / 100.0
