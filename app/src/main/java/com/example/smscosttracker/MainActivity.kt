@@ -1,6 +1,7 @@
 package com.example.smscosttracker
 
 import android.os.Bundle
+import java.io.File
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -20,6 +21,7 @@ import com.example.smscosttracker.data.AppDatabase
 import com.example.smscosttracker.data.OnboardingPreferences
 import com.example.smscosttracker.data.TransactionImporter
 import com.example.smscosttracker.data.TransactionRepository
+import com.example.smscosttracker.ui.CrashReportScreen
 import com.example.smscosttracker.ui.components.LedgerBottomBar
 import com.example.smscosttracker.ui.onboarding.OnboardingFlow
 import com.example.smscosttracker.ui.screens.ActivityScreen
@@ -36,9 +38,32 @@ import com.example.smscosttracker.ui.theme.SmsCostTrackerTheme
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val crashFile = File(filesDir, "last_crash.txt")
+        val previousHandler = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            runCatching { crashFile.writeText(throwable.stackTraceToString()) }
+            previousHandler?.uncaughtException(thread, throwable)
+        }
         setContent {
             SmsCostTrackerTheme {
                 val context = LocalContext.current
+                var crashText by remember {
+                    mutableStateOf(
+                        crashFile.takeIf { it.isFile }
+                            ?.readText()
+                            ?.takeIf { it.isNotBlank() }
+                    )
+                }
+                if (crashText != null) {
+                    CrashReportScreen(
+                        stackTrace = crashText!!,
+                        onTryAgain = {
+                            crashFile.delete()
+                            crashText = null
+                        }
+                    )
+                    return@SmsCostTrackerTheme
+                }
                 val database = remember { AppDatabase.get(context) }
                 val repository = remember { TransactionRepository(database) }
                 val importer = remember { TransactionImporter(database) }
