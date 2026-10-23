@@ -16,6 +16,9 @@ interface RawSmsDao {
     @Query("SELECT * FROM raw_sms")
     fun getAll(): List<RawSmsEntity>
 
+    @Query("SELECT * FROM raw_sms WHERE address = :address AND body = :body LIMIT 1")
+    fun find(address: String, body: String): RawSmsEntity?
+
     @Query(
         "SELECT * FROM raw_sms WHERE address = :address AND date BETWEEN :from AND :to " +
             "ORDER BY ABS(date - :anchor) LIMIT 20"
@@ -54,6 +57,42 @@ interface CategoryCorrectionDao {
 
     @Query("SELECT * FROM category_corrections")
     fun getAll(): List<CategoryCorrectionEntity>
+}
+
+data class LabelledSms(
+    val rawSmsId: Long,
+    val type: String,
+    val merchant: String?,
+    val amount: String?,
+    val instrument: String?,
+    val updatedAt: Long,
+    val address: String,
+    val body: String
+)
+
+@Dao
+interface MessageLabelDao {
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun upsert(label: MessageLabelEntity)
+
+    @Query("SELECT * FROM message_labels WHERE rawSmsId = :rawSmsId")
+    fun get(rawSmsId: Long): MessageLabelEntity?
+
+    @Query("DELETE FROM message_labels WHERE rawSmsId = :rawSmsId")
+    fun delete(rawSmsId: Long)
+
+    @Query("SELECT COUNT(*) FROM message_labels")
+    fun count(): Int
+
+    @Query("SELECT MAX(updatedAt) FROM message_labels")
+    fun lastUpdatedAt(): Long?
+
+    @Query(
+        "SELECT l.rawSmsId, l.type, l.merchant, l.amount, l.instrument, l.updatedAt, " +
+            "r.address, r.body FROM message_labels l JOIN raw_sms r ON r.id = l.rawSmsId " +
+            "ORDER BY l.updatedAt"
+    )
+    fun getAllWithMessages(): List<LabelledSms>
 }
 
 @Dao

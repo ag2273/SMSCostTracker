@@ -35,6 +35,16 @@ data class CategoryCorrectionEntity(
     val category: String
 )
 
+@Entity(tableName = "message_labels")
+data class MessageLabelEntity(
+    @PrimaryKey val rawSmsId: Long,
+    val type: String,
+    val merchant: String? = null,
+    val amount: String? = null,
+    val instrument: String? = null,
+    val updatedAt: Long
+)
+
 @Entity(tableName = "instruments", primaryKeys = ["address", "digits"])
 data class InstrumentEntity(
     val address: String,

@@ -33,6 +33,15 @@ A number that identifies where money moved: a card last-4 or a bank account numb
 ## Instrument registry
 The user-confirmed map of Instruments to Channels for each sender. It is created by the account/card review step or by correcting a Transaction, and is consulted before fallback parsing.
 
+## Message type
+What a bank SMS reports: Purchase, Bill or transfer, Cash withdrawal, Credit/refund, Own-account move, Statement, Declined, or Notice. Only the first three become Transactions.
+
+## Message label
+A user's reading of one stored SMS: its Message type and optionally its Merchant, Amount and Instrument digits.
+
+## Template
+A Message label generalised to every SMS from the same sender with the same wording, where numbers, dates, masked digits and the labelled Merchant may differ.
+
 ## Thread selection
 The user's choice of SMS conversations belonging to banks. Only selected threads are imported.
 

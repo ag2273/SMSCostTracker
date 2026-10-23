@@ -4,6 +4,9 @@ import com.example.smscosttracker.data.InstrumentCandidate
 import com.example.smscosttracker.data.ParsedTransaction
 import com.example.smscosttracker.data.RawSms
 import com.example.smscosttracker.data.TransactionChannel
+import com.example.smscosttracker.ml.MessageType
+import com.example.smscosttracker.ml.SmsModel
+import com.example.smscosttracker.ml.SmsText
 import java.math.BigDecimal
 import java.math.RoundingMode
 import java.time.Instant
@@ -18,12 +21,11 @@ sealed interface ParseOutcome {
 }
 
 object TransactionParser {
-    const val PARSER_VERSION = 3
+    const val PARSER_VERSION = 4
 
     private const val UNKNOWN_MERCHANT = "Unknown"
     private const val CURRENCY_SEPARATOR = "[\\s\\u00A0\\u2007\\u202F:=]*"
 
-    private val bidiControls = Regex("[\u200B\u200E\u200F\u202A-\u202E\u2066-\u2069]")
     private val currencyFirst = Regex(
         "(?i)(EGP|SAR|AED|USD|ريال|جنيه|درهم)$CURRENCY_SEPARATOR" +
             "([0-9][0-9,]*(?:\\.[0-9]{1,2})?)"
@@ -36,14 +38,20 @@ object TransactionParser {
         "(?i)(?:amount|debit(?:ed)?|paid|payment|purchase|withdrawal|deducted|spent|charged)" +
             "[^0-9]{0,20}([0-9][0-9,]*(?:\\.[0-9]{1,2})?)"
     )
-    private val nonTransaction = Regex(
-        "(?i)\\b(otp|one[- ]time password|verification code|declined|failed|not processed|" +
-            "between your accounts|between own accounts|internal transfer|" +
-            "credit card\\s*:\\s*payment|credit card payment|card\\s*:\\s*payment|" +
-            "card repayment|payment to (?:your )?(?:credit )?card|" +
-            "amount due|minimum due|total due|payment due|due date|" +
-            "statement(?: has been)? issued|statement date|closing balance)\\b"
+    private val nonTransaction = listOf(
+        MessageType.DECLINED to Regex("(?i)\\b(declined|failed|not processed)\\b"),
+        MessageType.NOTICE to Regex("(?i)\\b(otp|one[- ]time password|verification code)\\b"),
+        MessageType.INTERNAL to Regex(
+            "(?i)\\b(between your accounts|between own accounts|internal transfer|" +
+                "credit card\\s*:\\s*payment|credit card payment|card\\s*:\\s*payment|" +
+                "card repayment|payment to (?:your )?(?:credit )?card)\\b"
+        ),
+        MessageType.STATEMENT to Regex(
+            "(?i)\\b(amount due|minimum due|total due|payment due|due date|" +
+                "statement(?: has been)? issued|statement date|closing balance)\\b"
+        )
     )
+    private val withdrawal = Regex("(?i)\\b(atm|cash withdrawal|withdraw(?:al|n)?)\\b|سحب")
     private val creditOrRefund = Regex(
         "(?i)\\b(refund|refunded|credited|credit transfer|deposited|deposit received|" +
             "deposit of|salary|cashback|reversal|reversed|received from|incoming transfer)\\b"
@@ -114,34 +122,37 @@ object TransactionParser {
     fun parse(
         message: RawSms,
         defaultCurrency: String = "EGP",
-        instruments: Map<String, TransactionChannel> = emptyMap()
-    ): ParsedTransaction? = (analyze(message, defaultCurrency, instruments) as? ParseOutcome.Parsed)
-        ?.transaction
+        instruments: Map<String, TransactionChannel> = emptyMap(),
+        model: SmsModel? = null
+    ): ParsedTransaction? =
+        (analyze(message, defaultCurrency, instruments, model) as? ParseOutcome.Parsed)?.transaction
 
     fun analyze(
         message: RawSms,
         defaultCurrency: String = "EGP",
-        instruments: Map<String, TransactionChannel> = emptyMap()
+        instruments: Map<String, TransactionChannel> = emptyMap(),
+        model: SmsModel? = null
     ): ParseOutcome {
-        val body = bidiControls.replace(message.body, "")
-        if (nonTransaction.containsMatchIn(body)) {
-            return ParseOutcome.Skipped("Not a spending message")
+        val body = SmsText.clean(message.body)
+        val rule = classify(body)
+        val prediction = model?.predict(message.address, body, rule.type)
+        val type = prediction?.type ?: rule.type
+        if (!type.isSpending) {
+            return ParseOutcome.Skipped(
+                if (prediction == null) rule.skipReason ?: type.label else "${type.label} (learned)"
+            )
         }
-        if (creditOrRefund.containsMatchIn(body)) {
-            return ParseOutcome.Skipped("Credit, refund or income")
-        }
-        val amount = extractAmount(body, defaultCurrency)
-            ?: return if (transactionHint.containsMatchIn(body)) {
-                ParseOutcome.Unparsed("Amount not found")
-            } else {
-                ParseOutcome.Skipped("No amount or spending hint")
-            }
-        val instrument = extractInstrument(body, message.address, instruments)
+        val amount = prediction?.amount?.let { learnedAmount(it, body, defaultCurrency) }
+            ?: extractAmount(body, defaultCurrency)
+            ?: return ParseOutcome.Unparsed("Amount not found")
+        val instrument = prediction?.instrument
+            ?.let { learnedInstrument(it, body, message.address, instruments) }
+            ?: extractInstrument(body, message.address, instruments)
         return ParseOutcome.Parsed(
             ParsedTransaction(
                 amountMinor = amount.first,
                 currency = amount.second,
-                merchant = extractMerchant(body),
+                merchant = prediction?.merchant ?: extractMerchant(body),
                 occurredAt = extractDate(body, message.date),
                 sourceAddress = message.address,
                 account = instrument.first,
@@ -150,10 +161,56 @@ object TransactionParser {
         )
     }
 
+    /** The rule-based message type, also the weak label the [SmsModel] trains on. */
+    fun ruleType(body: String): MessageType = classify(SmsText.clean(body)).type
+
+    private class RuleDecision(val type: MessageType, val skipReason: String? = null)
+
+    private fun classify(body: String): RuleDecision {
+        nonTransaction.firstOrNull { it.second.containsMatchIn(body) }?.let {
+            return RuleDecision(it.first, "Not a spending message")
+        }
+        if (creditOrRefund.containsMatchIn(body)) {
+            return RuleDecision(MessageType.CREDIT, "Credit, refund or income")
+        }
+        if (extractAmount(body, "EGP") == null && !transactionHint.containsMatchIn(body)) {
+            return RuleDecision(MessageType.NOTICE, "No amount or spending hint")
+        }
+        return RuleDecision(
+            when {
+                withdrawal.containsMatchIn(body) -> MessageType.WITHDRAWAL
+                accountContext.containsMatchIn(body) -> MessageType.BILL_OR_TRANSFER
+                else -> MessageType.PURCHASE
+            }
+        )
+    }
+
+    private fun learnedAmount(
+        token: String,
+        body: String,
+        defaultCurrency: String
+    ): Pair<Long, String>? {
+        val amount = token.replace(",", "").toBigDecimalOrNull() ?: return null
+        val currency = extractAmount(body, defaultCurrency)?.second ?: defaultCurrency.uppercase()
+        return amount.toMinorUnits() to currency
+    }
+
+    private fun learnedInstrument(
+        digits: String,
+        body: String,
+        sender: String,
+        instruments: Map<String, TransactionChannel>
+    ): Pair<String, TransactionChannel> {
+        val channel = instruments[instrumentKey(sender, digits)]
+            ?: candidates(body).firstOrNull { it.digits == digits }?.channel
+            ?: TransactionChannel.OTHER
+        return "$sender $digits" to channel
+    }
+
     fun instrumentKey(address: String, digits: String): String = "$address|$digits"
 
     fun candidates(rawBody: String): List<InstrumentCandidate> {
-        val body = bidiControls.replace(rawBody, "")
+        val body = SmsText.clean(rawBody)
         val found = LinkedHashMap<String, Pair<TransactionChannel, Int>>()
         fun add(
             digits: String?,

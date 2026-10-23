@@ -12,9 +12,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         RawSmsEntity::class,
         TransactionEntity::class,
         CategoryCorrectionEntity::class,
-        InstrumentEntity::class
+        InstrumentEntity::class,
+        MessageLabelEntity::class
     ],
-    version = 7,
+    version = 8,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -22,6 +23,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun transactionDao(): TransactionDao
     abstract fun categoryCorrectionDao(): CategoryCorrectionDao
     abstract fun instrumentDao(): InstrumentDao
+    abstract fun messageLabelDao(): MessageLabelDao
 
     companion object {
         @Volatile
@@ -86,6 +88,17 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `message_labels` " +
+                        "(`rawSmsId` INTEGER NOT NULL, `type` TEXT NOT NULL, " +
+                        "`merchant` TEXT, `amount` TEXT, `instrument` TEXT, " +
+                        "`updatedAt` INTEGER NOT NULL, PRIMARY KEY(`rawSmsId`))"
+                )
+            }
+        }
+
         fun get(context: Context): AppDatabase =
             instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
@@ -98,7 +111,8 @@ abstract class AppDatabase : RoomDatabase() {
                     MIGRATION_3_4,
                     MIGRATION_4_5,
                     MIGRATION_5_6,
-                    MIGRATION_6_7
+                    MIGRATION_6_7,
+                    MIGRATION_7_8
                 ).build().also { instance = it }
             }
     }

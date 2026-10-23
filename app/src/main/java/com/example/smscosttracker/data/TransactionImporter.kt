@@ -96,12 +96,13 @@ class TransactionImporter(
                 TransactionParser.instrumentKey(it.address, it.digits) to
                     TransactionChannel.fromStorage(it.channel)
             }
+        val model = SmsModelStore.load(database)
         val transactions = ArrayList<ParsedTransaction>(messages.size)
         var parsed = 0
         var skipped = 0
         var unparsed = 0
         messages.forEachIndexed { index, message ->
-            when (val outcome = parser.analyze(message, instruments = instruments)) {
+            when (val outcome = parser.analyze(message, instruments = instruments, model = model)) {
                 is ParseOutcome.Parsed -> {
                     transactions += outcome.transaction
                     parsed++
