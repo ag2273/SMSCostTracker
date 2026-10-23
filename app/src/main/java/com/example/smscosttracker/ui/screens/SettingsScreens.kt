@@ -74,6 +74,7 @@ import com.example.smscosttracker.data.TransactionEntity
 import com.example.smscosttracker.data.TransactionImporter
 import com.example.smscosttracker.data.TransactionRepository
 import com.example.smscosttracker.data.UnparsedSms
+import com.example.smscosttracker.ml.MessageType
 import com.example.smscosttracker.parsing.TransactionParser
 import com.example.smscosttracker.sms.SmsReader
 import com.example.smscosttracker.sms.SmsThread
@@ -92,6 +93,7 @@ import com.example.smscosttracker.ui.components.ScreenBackground
 import com.example.smscosttracker.ui.components.SecondaryButton
 import com.example.smscosttracker.ui.components.SelectRow
 import com.example.smscosttracker.ui.components.rememberCsvExport
+import com.example.smscosttracker.ui.sheets.MessageLabelSheet
 import com.example.smscosttracker.ui.theme.Ledger
 import java.time.Instant
 import java.time.ZoneId
@@ -677,9 +679,11 @@ fun ExportScreen(
 fun UnparsedMessagesScreen(
     repository: TransactionRepository,
     refreshKey: Int,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onChanged: () -> Unit
 ) {
     var messages by remember { mutableStateOf<List<UnparsedSms>>(emptyList()) }
+    var labelling by remember { mutableStateOf<UnparsedSms?>(null) }
     var loading by remember { mutableStateOf(true) }
     val formatter = remember {
         DateTimeFormatter.ofPattern("d MMM yyyy · HH:mm", Locale.ENGLISH)
@@ -748,6 +752,10 @@ fun UnparsedMessagesScreen(
                                     color = Ledger.Ink,
                                     modifier = Modifier.padding(top = 8.dp)
                                 )
+                                LedgerTextButton(
+                                    text = "Teach how to read this",
+                                    onClick = { labelling = message }
+                                )
                             }
                         }
                     }
@@ -755,6 +763,21 @@ fun UnparsedMessagesScreen(
                 }
             }
         }
+    }
+
+    labelling?.let { message ->
+        MessageLabelSheet(
+            rawSmsId = message.rawSmsId,
+            address = message.address,
+            body = message.body,
+            repository = repository,
+            initialType = MessageType.PURCHASE,
+            onDismiss = { labelling = null },
+            onSaved = {
+                labelling = null
+                onChanged()
+            }
+        )
     }
 }
 
