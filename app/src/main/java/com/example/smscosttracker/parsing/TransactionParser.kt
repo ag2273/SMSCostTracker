@@ -18,7 +18,7 @@ sealed interface ParseOutcome {
 }
 
 object TransactionParser {
-    const val PARSER_VERSION = 2
+    const val PARSER_VERSION = 3
 
     private const val UNKNOWN_MERCHANT = "Unknown"
     private const val CURRENCY_SEPARATOR = "[\\s\\u00A0\\u2007\\u202F:=]*"
@@ -101,6 +101,7 @@ object TransactionParser {
         )
     )
     private val maskedPattern = Regex("(?i)\\*{2,}[ \\t]*([0-9]{3,6})")
+    private val merchantSentenceBreak = Regex("\\.\\s+(?=\\p{Lu})")
     private val cardContext = Regex(
         "(?i)\\b(pos|purchase|online purchase|card|mada|visa|mastercard|" +
             "google pay|apple pay|used at)\\b"
@@ -243,7 +244,8 @@ object TransactionParser {
     private fun extractMerchant(body: String): String {
         for (pattern in merchantPatterns) {
             val raw = pattern.find(body)?.groupValues?.get(1)?.trim() ?: continue
-            val cleaned = raw
+            val sentenceBreak = merchantSentenceBreak.find(raw)?.range?.first ?: raw.length
+            val cleaned = raw.substring(0, sentenceBreak)
                 .replace(Regex("\\s+on\\s+.*$", RegexOption.IGNORE_CASE), "")
                 .replace(Regex("\\s+\\d+.*$"), "")
                 .replace(

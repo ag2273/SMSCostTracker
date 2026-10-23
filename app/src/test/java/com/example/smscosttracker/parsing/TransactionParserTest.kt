@@ -346,6 +346,24 @@ class TransactionParserTest {
     }
 
     @Test
+    fun `stops the merchant before the available limit sentence`() {
+        val cases = listOf(
+            "AMAZON. Your available limit is EGP 234609.10" to "AMAZON",
+            "My Fawry. Your available limit is EGP 241763.95" to "My Fawry",
+            "Talabat. Your available limit is EGP 262081.07" to "Talabat"
+        )
+        cases.forEach { (tail, expected) ->
+            val parsed = TransactionParser.parse(
+                message(
+                    "Your Credit Card ending with *** 5797 has been used for " +
+                        "EGP 3204.00 on 15/10/2026 at $tail"
+                )
+            )!!
+            assertEquals(expected, parsed.merchant)
+        }
+    }
+
+    @Test
     fun `ignores statement amount due messages`() {
         assertNull(
             TransactionParser.parse(

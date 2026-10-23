@@ -536,7 +536,13 @@ fun TransactionDetailSheet(
             LedgerCard {
                 Column(modifier = Modifier.padding(15.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
                     Text("Why this result", style = MaterialTheme.typography.titleMedium, color = Ledger.Ink)
-                    WhyRow("Merchant was read from the message text.")
+                    WhyRow(
+                        if (transaction.merchant == "Unknown") {
+                            "No merchant name was recognised in the message text."
+                        } else {
+                            "Merchant was read from the message text."
+                        }
+                    )
                     WhyRow(
                         if (transaction.account.isBlank()) {
                             "No instrument matched; this transaction is tagged for review."
