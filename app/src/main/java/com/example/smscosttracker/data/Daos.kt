@@ -13,6 +13,9 @@ interface RawSmsDao {
     @Query("SELECT COUNT(*) FROM raw_sms")
     fun count(): Int
 
+    @Query("SELECT MAX(date) FROM raw_sms")
+    fun latestDate(): Long?
+
     @Query("SELECT * FROM raw_sms")
     fun getAll(): List<RawSmsEntity>
 

@@ -46,7 +46,7 @@ A Message label generalised to every SMS from the same sender with the same word
 The user's choice of SMS conversations belonging to banks. Only selected threads are imported.
 
 ## Sync
-The on-demand process of reading selected threads and turning their messages into Transactions.
+Reading new messages from the selected threads and turning them into Transactions. Runs automatically when the app opens and every 6 hours (unless turned off in Settings), and on demand via Re-import.
 
 ## Duplicate
 A Transaction with the same amount, merchant, and occurrence time within 24 hours of another. Duplicates collapse into a single Transaction.
