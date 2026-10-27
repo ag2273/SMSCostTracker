@@ -49,6 +49,18 @@ class OnboardingPreferences(context: Context) {
             prefs.edit().putInt(KEY_PARSER_VERSION, value).apply()
         }
 
+    var autoSync: Boolean
+        get() = prefs.getBoolean(KEY_AUTO_SYNC, true)
+        set(value) {
+            prefs.edit().putBoolean(KEY_AUTO_SYNC, value).apply()
+        }
+
+    var lastSyncedAt: Long
+        get() = prefs.getLong(KEY_LAST_SYNCED, 0L)
+        set(value) {
+            prefs.edit().putLong(KEY_LAST_SYNCED, value).apply()
+        }
+
     fun markComplete(stage: OnboardingStage = OnboardingStage.COMPLETE) {
         prefs.edit()
             .putBoolean(KEY_COMPLETE, true)
@@ -65,5 +77,7 @@ class OnboardingPreferences(context: Context) {
         const val KEY_COMPLETE = "complete"
         const val KEY_THREADS = "thread_ids"
         const val KEY_PARSER_VERSION = "parser_version"
+        const val KEY_AUTO_SYNC = "auto_sync"
+        const val KEY_LAST_SYNCED = "last_synced_at"
     }
 }

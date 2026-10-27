@@ -77,6 +77,7 @@ import com.example.smscosttracker.data.UnparsedSms
 import com.example.smscosttracker.ml.MessageType
 import com.example.smscosttracker.parsing.TransactionParser
 import com.example.smscosttracker.sms.SmsReader
+import com.example.smscosttracker.sms.SmsSync
 import com.example.smscosttracker.sms.SmsThread
 import com.example.smscosttracker.ui.components.ChoiceRow
 import com.example.smscosttracker.ui.components.EmptyState
@@ -136,6 +137,11 @@ fun SettingsScreen(
         }.getOrNull().orEmpty()
     }
     var stats by remember { mutableStateOf(SettingsStats()) }
+    var autoSync by remember { mutableStateOf(preferences.autoSync) }
+    val lastSyncedAt = remember(refreshKey) { preferences.lastSyncedAt }
+    val syncFormatter = remember {
+        DateTimeFormatter.ofPattern("d MMM · HH:mm", Locale.ENGLISH).withZone(ZoneId.systemDefault())
+    }
 
     LaunchedEffect(refreshKey) {
         thread {
@@ -187,6 +193,22 @@ fun SettingsScreen(
                         value = if (stats.loading) "Loading…" else "${stats.unparsed} kept for review",
                         icon = Icons.Outlined.WarningAmber,
                         onClick = onOpenUnparsed
+                    )
+                    LedgerDivider()
+                    SelectRow(
+                        label = "Sync new messages automatically",
+                        value = if (lastSyncedAt > 0) {
+                            "Last synced ${syncFormatter.format(Instant.ofEpochMilli(lastSyncedAt))}"
+                        } else {
+                            "Checks selected threads when you open the app and every 6 hours"
+                        },
+                        icon = Icons.Outlined.Sync,
+                        trailing = if (autoSync) "On" else "Off",
+                        onClick = {
+                            autoSync = !autoSync
+                            preferences.autoSync = autoSync
+                            if (autoSync) SmsSync.schedule(context) else SmsSync.cancel(context)
+                        }
                     )
                     LedgerDivider()
                     SelectRow(

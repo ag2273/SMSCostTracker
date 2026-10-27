@@ -1,6 +1,8 @@
 package com.example.smscosttracker
 
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import java.io.File
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -17,14 +19,19 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.ui.unit.dp
 import com.example.smscosttracker.analysis.ActivityFilterState
 import com.example.smscosttracker.analysis.DatePreset
@@ -34,6 +41,7 @@ import com.example.smscosttracker.data.OnboardingPreferences
 import com.example.smscosttracker.data.TransactionImporter
 import com.example.smscosttracker.data.TransactionRepository
 import com.example.smscosttracker.parsing.TransactionParser
+import com.example.smscosttracker.sms.SmsSync
 import com.example.smscosttracker.ui.CrashReportScreen
 import com.example.smscosttracker.ui.components.LedgerBottomBar
 import com.example.smscosttracker.ui.onboarding.OnboardingFlow
@@ -50,6 +58,7 @@ import com.example.smscosttracker.ui.theme.Ledger
 import com.example.smscosttracker.ui.theme.SmsCostTrackerTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlin.concurrent.thread
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -92,7 +101,25 @@ class MainActivity : ComponentActivity() {
                 var rebuilding by remember { mutableStateOf(false) }
                 var refreshKey by remember { mutableStateOf(0) }
 
+                val syncReady by rememberUpdatedState(!showOnboarding && !rebuilding)
+                val lifecycleOwner = LocalLifecycleOwner.current
+                DisposableEffect(lifecycleOwner) {
+                    val observer = LifecycleEventObserver { _, event ->
+                        if (event == Lifecycle.Event.ON_RESUME && syncReady) {
+                            thread {
+                                val result = runCatching { SmsSync.syncNow(context) }.getOrNull()
+                                if ((result?.rawInserted ?: 0) > 0) {
+                                    Handler(Looper.getMainLooper()).post { refreshKey++ }
+                                }
+                            }
+                        }
+                    }
+                    lifecycleOwner.lifecycle.addObserver(observer)
+                    onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+                }
+
                 LaunchedEffect(Unit) {
+                    if (preferences.autoSync) SmsSync.schedule(context)
                     val needsRebuild = preferences.complete &&
                         preferences.parserVersion < TransactionParser.PARSER_VERSION
                     if (needsRebuild) {
