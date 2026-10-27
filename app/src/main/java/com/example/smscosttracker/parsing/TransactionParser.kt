@@ -21,9 +21,11 @@ sealed interface ParseOutcome {
 }
 
 object TransactionParser {
-    const val PARSER_VERSION = 6
+    const val PARSER_VERSION = 7
 
     private const val UNKNOWN_MERCHANT = "Unknown"
+    private const val ATM_MERCHANT = "ATM withdrawal"
+    private const val TRANSFER_MERCHANT = "Transfer"
     private const val CURRENCY_SEPARATOR = "[\\s\\u00A0\\u2007\\u202F:=]*"
 
     private val currencyFirst = Regex(
@@ -40,21 +42,30 @@ object TransactionParser {
     )
     private val nonTransaction = listOf(
         MessageType.DECLINED to Regex("(?i)\\b(declined|failed|not processed)\\b"),
-        MessageType.NOTICE to Regex("(?i)\\b(otp|one[- ]time password|verification code)\\b"),
+        MessageType.NOTICE to Regex(
+            "(?i)\\b(otp|one[- ]time password|verification code|security code|activation code|" +
+                "authentication code)\\b|كلمة مرور صالحة لمرة واحدة|رمز التحقق|رمز التفعيل|" +
+                "الرمز\\s*[0-9]+\\s*ل|تم تفعيل"
+        ),
         MessageType.INTERNAL to Regex(
             "(?i)\\b(between your accounts|between own accounts|internal transfer|" +
                 "credit card\\s*:\\s*payment|credit card payment|card\\s*:\\s*payment|" +
-                "card repayment|payment to (?:your )?(?:credit )?card)\\b"
+                "card repayment|payment to (?:your )?(?:credit )?card|wallet top ?up|top[- ]?up|" +
+                "adding money to (?:your )?(?:account|wallet)|your payment of [^\\n]{0,30}? was successful)\\b|" +
+                "بين حساباتك|بين حساباتي|بين الحسابات|تم سداد بطاقتك|تسديد بطاقة|لحساب بطاقتك|" +
+                "(?:إئتمانية|ائتمانية|الائتمانية)\\s*:\\s*(?:تسديد|تأكيد السداد)"
         ),
         MessageType.STATEMENT to Regex(
             "(?i)\\b(amount due|minimum due|total due|payment due|due date|" +
-                "statement(?: has been)? issued|statement date|closing balance)\\b"
+                "statement(?: has been)? issued|statement date|closing balance|next billing date|" +
+                "monthly installment)\\b|كشف حساب|المبلغ المستحق|تاريخ الاستحقاق"
         )
     )
     private val withdrawal = Regex("(?i)\\b(atm|cash withdrawal|withdraw(?:al|n)?)\\b|سحب")
     private val creditOrRefund = Regex(
         "(?i)\\b(refund|refunded|credited|credit transfer|deposited|deposit received|" +
-            "deposit of|salary|cashback|reversal|reversed|received from|incoming transfer)\\b"
+            "deposit of|salary|cashback|reversal|reversed|received from|incoming transfer|" +
+            "you have received|received amount)\\b|واردة|وارده|إلى حسابك|الى حسابك|ايداع|إيداع|استرداد|إسترداد|استرجاع"
     )
     private val balanceLine = Regex(
         "(?i)\\b(available balance|current balance|balance|credit limit|available limit|" +
@@ -64,13 +75,31 @@ object TransactionParser {
         "(?i)\\b(amount|purchase|payment|paid|debit(?:ed)?|withdraw(?:al|n)?|deducted|" +
             "spent|charged|transfer(?:red)?|pos|cheque|bill)\\b"
     )
+    private const val MERCHANT_CHARS = "[\\p{L}0-9&.'×\\- ]{2,40}"
+    private const val LABEL_END = "(?:\\s*:\\s*|\\s+)"
     private val merchantPatterns = listOf(
-        Regex("(?i)\\bat\\s*:?\\s+([\\p{L}0-9&.'×\\- ]{2,40})"),
-        Regex("(?i)\\bmerchant\\s*:?\\s+([\\p{L}0-9&.'×\\- ]{2,40})"),
-        Regex("(?i)\\bto\\s*:?\\s+([\\p{L}0-9&.'×\\- ]{2,40})"),
-        Regex("(?i)\\bfrom\\s*:?\\s+([\\p{L}0-9&.'×\\- ]{2,40})"),
-        Regex("(?:لدى|من|في)\\s+([\\p{L}0-9&.'\\- ]{2,40})")
+        Regex(
+            "(?i)\\b[0-9]{2}(?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)[0-9]{2}\\s+" +
+                "(\\p{L}[\\p{L}0-9&.'*/ \\-]{1,40}?)\\s+(?:purchase\\s+)?(?:from\\s+)?[0-9]{3}-"
+        ),
+        Regex("(?i)\\bat$LABEL_END($MERCHANT_CHARS)"),
+        Regex("@\\s*($MERCHANT_CHARS)"),
+        Regex("(?i)\\bmerchant$LABEL_END($MERCHANT_CHARS)"),
+        Regex("(?:لدى|عند)$LABEL_END($MERCHANT_CHARS)"),
+        Regex("مفوتر\\s*:\\s*[0-9]*\\s*($MERCHANT_CHARS)"),
+        Regex("الجهة\\s*:\\s*($MERCHANT_CHARS)"),
+        Regex("(?:إلى|الى)\\s*:\\s*($MERCHANT_CHARS)"),
+        Regex("(?i)\\bto$LABEL_END($MERCHANT_CHARS)"),
+        Regex("(?i)\\bfrom$LABEL_END($MERCHANT_CHARS)"),
+        Regex("من\\s+($MERCHANT_CHARS)"),
+        Regex("في\\s+($MERCHANT_CHARS)")
     )
+    private val merchantStop = Regex(
+        "(?i)\\s+(?:with ref\\w*|reference|is confirmed|your available|available|has been|بمبلغ|" +
+            "الرصيد|بتاريخ|بقيمة)\\b.*$|\\s+(?:بمبلغ|الرصيد|بتاريخ|بقيمة).*$"
+    )
+    private val genericMerchants = setOf("your account", "حسابك", "حسابكم", "حساب", "contact")
+    private val genericMerchantPrefixes = listOf("بطاقة", "حساب", "خلال")
     private val datePatterns = listOf(
         Regex("\\b(\\d{4}-\\d{2}-\\d{2})\\b") to DateTimeFormatter.ISO_LOCAL_DATE,
         Regex("\\b(\\d{1,2}/(\\d{1,2})/(\\d{4}))\\b") to DateTimeFormatter.ofPattern("d/M/yyyy"),
@@ -79,10 +108,12 @@ object TransactionParser {
     private val cardPatterns = listOf(
         Regex(
             "(?i)\\b(?:card|mada|visa|mastercard|google pay|apple pay)" +
-                "[^0-9\\n]{0,12}[*xX#]*([0-9]{3,6})(?![0-9:/-])"
+                "[^0-9\\n]{0,12}[*xX#]*([0-9]{3,6})(?![0-9/-]|:[0-9])"
         ),
         Regex("(?i)\\*{2,}[ \\t]*([0-9]{3,6})[^\\n]{0,12}\\b(?:mada|visa|mastercard)\\b"),
-        Regex("(?i)\\b(?:by|via)\\s*:?\\s*\\*{2,}[ \\t]*([0-9]{3,6})")
+        Regex("(?i)\\b(?:by|via)\\s*:?\\s*\\*+[ \\t]*([0-9]{3,6})"),
+        Regex("(?:بطاقة|بطاقتك)\\s*:?\\s*[^0-9\\n]{0,50}?([0-9]{3,6})(?![0-9/-]|:[0-9])"),
+        Regex("المنتهية\\s*(?:برقم)?\\s*[*xX#]*\\s*([0-9]{3,6})")
     )
     private val accountPatterns = listOf(
         Regex(
@@ -106,17 +137,20 @@ object TransactionParser {
         ),
         Regex(
             "(?im)(?:^|\\n)\\s*(?:from|to)\\s+([0-9]{3,6})(?![0-9:/-])"
-        )
+        ),
+        Regex("(?i)\\b(?:from|account|a/c)\\s+[0-9-]*\\*{2,}-?([0-9]{3,6})(?![0-9])"),
+        Regex("(?m)(?:^|\\n)\\s*(?:من|إلى|الى)\\s*:\\s*[*xX#]*([0-9]{3,6})(?![0-9/-]|:[0-9])"),
+        Regex("(?:حسابك|حساب|الحساب)\\s*(?:رقم)?\\s*:?\\s*[*xX#]*([0-9]{3,6})(?![0-9/-]|:[0-9])")
     )
     private val maskedPattern = Regex("(?i)\\*{2,}[ \\t]*([0-9]{3,6})")
-    private val merchantSentenceBreak = Regex("\\.\\s+(?=\\p{Lu})")
+    private val merchantSentenceBreak = Regex("\\.\\s+(?=[\\p{Lu}\\u0600-\\u06FF])")
     private val cardContext = Regex(
         "(?i)\\b(pos|purchase|online purchase|card|mada|visa|mastercard|" +
-            "google pay|apple pay|used at)\\b"
+            "google pay|apple pay|used at)\\b|شراء|نقاط البيع|بطاقة|بطاقتك"
     )
     private val accountContext = Regex(
         "(?i)\\b(transfer|funds transfer|bill payment|sadad|sarie|standing order|" +
-            "direct debit|cheque|salary)\\b"
+            "direct debit|cheque|salary)\\b|حوالة|حواله|تحويل|سداد|فاتورة|قرض|تمويل"
     )
 
     fun parse(
@@ -152,7 +186,14 @@ object TransactionParser {
             ParsedTransaction(
                 amountMinor = amount.first,
                 currency = amount.second,
-                merchant = prediction?.merchant ?: extractMerchant(body),
+                merchant = prediction?.merchant ?: extractMerchant(body).let {
+                    when {
+                        it != UNKNOWN_MERCHANT -> it
+                        type == MessageType.WITHDRAWAL -> ATM_MERCHANT
+                        type == MessageType.BILL_OR_TRANSFER -> TRANSFER_MERCHANT
+                        else -> it
+                    }
+                },
                 occurredAt = extractDate(body, message.date),
                 sourceAddress = message.address,
                 account = instrument.first,
@@ -299,10 +340,10 @@ object TransactionParser {
     }
 
     private fun extractMerchant(body: String): String {
-        for (pattern in merchantPatterns) {
-            val raw = pattern.find(body)?.groupValues?.get(1)?.trim() ?: continue
+        for (match in merchantPatterns.asSequence().flatMap { it.findAll(body) }) {
+            val raw = match.groupValues[1].trim()
             val sentenceBreak = merchantSentenceBreak.find(raw)?.range?.first ?: raw.length
-            val cleaned = raw.substring(0, sentenceBreak)
+            val cleaned = merchantStop.replace(raw.substring(0, sentenceBreak).replace(Regex("×+"), " "), "")
                 .replace(Regex("\\s+on\\s+.*$", RegexOption.IGNORE_CASE), "")
                 .replace(Regex("\\s+\\d+.*$"), "")
                 .replace(
@@ -312,10 +353,13 @@ object TransactionParser {
                     ),
                     ""
                 )
+                .replace(Regex("\\s+(?:to|from)$", RegexOption.IGNORE_CASE), "")
                 .trim()
                 .trim('.', ',', '-')
             if (cleaned.length >= 2 &&
-                !cleaned.equals("your account", ignoreCase = true) &&
+                cleaned.any { it.isLetter() } &&
+                cleaned.lowercase() !in genericMerchants &&
+                genericMerchantPrefixes.none { cleaned.startsWith(it) } &&
                 !balanceLine.containsMatchIn(cleaned)
             ) {
                 return cleaned
