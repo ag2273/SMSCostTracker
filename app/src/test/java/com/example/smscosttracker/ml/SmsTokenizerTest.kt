@@ -33,7 +33,7 @@ class SmsTokenizerTest {
 
     @Test
     fun `normalizes arabic digits and strips direction marks`() {
-        val clean = SmsText.clean("‏خصم ١٬٢٥٠٫٥٠ ريال")
+        val clean = SmsText.clean("\u200Fخصم ١٬٢٥٠٫٥٠ ريال")
 
         assertEquals("خصم 1,250.50 ريال", clean)
         assertEquals(TokenKind.AMOUNT, SmsTokenizer.tokenize(clean)[1].kind)

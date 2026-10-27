@@ -3,7 +3,7 @@ package com.example.smscosttracker.ml
 import java.util.Locale
 
 object SmsText {
-    private val bidiControls = Regex("[​‎‏‪-‮⁦-⁩]")
+    private val bidiControls = Regex("[\\u200B\\u200E\\u200F\\u202A-\\u202E\\u2066-\\u2069]")
 
     fun clean(body: String): String {
         val stripped = bidiControls.replace(body, "")

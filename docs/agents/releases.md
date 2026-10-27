@@ -4,7 +4,15 @@ Releases are built and published by GitHub Actions (`.github/workflows/android.y
 
 ## Every push and pull request
 
-The workflow runs `testDebugUnitTest` and `assembleRelease`, and uploads the APK as a workflow artifact.
+The `build` job (required on `main`) runs, in order:
+
+1. `testDebugUnitTest`: JVM unit tests.
+2. `lintRelease`: Android lint. Any lint error fails the job and prints the report; warnings are allowed. The text and HTML reports are uploaded as the `lint-report` artifact.
+3. `assembleRelease`: the APK, uploaded as a workflow artifact.
+
+The `ui-tests` job runs the Compose instrumentation tests in `app/src/androidTest` on an API 30 emulator (`connectedDebugAndroidTest`). It runs for pull requests, pushes to `main` and manual runs, not for other branch pushes. Reports are uploaded as `ui-test-reports`.
+
+Run the same checks locally with `./gradlew testDebugUnitTest lintRelease connectedDebugAndroidTest` (the last needs a device or emulator).
 
 ## Publishing a release
 
