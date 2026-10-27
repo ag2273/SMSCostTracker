@@ -11,5 +11,3 @@ Ship pre-trained on-device model for Egypt/Saudi banks; fine-tune locally on use
 
 ## Consequences
 Offline capable; model size affects APK; cold-start accuracy depends on pre-trained coverage.
-filePath">
-/home/agents/SMSCostTracker/docs/adr/0001-on-device-ml-classification.md
