@@ -56,7 +56,9 @@ jobs:
         run: ./gradlew --no-daemon testDebugUnitTest
 
       - name: Lint
-        run: ./gradlew --no-daemon lintRelease
+        run: |
+          ./gradlew --no-daemon lintRelease
+          cat app/build/reports/lint-results-release.txt
 
       - name: Build release APK
         run: ./gradlew --no-daemon assembleRelease ${{ steps.signing.outputs.args }}
