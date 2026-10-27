@@ -169,7 +169,7 @@ class TransactionParserTest {
 
         assertEquals("BANK 1214", parsed.account)
         assertEquals(TransactionChannel.CARD, parsed.channel)
-        assertEquals("Hungerstation×Riya", parsed.merchant)
+        assertEquals("Hungerstation Riya", parsed.merchant)
     }
 
     @Test
