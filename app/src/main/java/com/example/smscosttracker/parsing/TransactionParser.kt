@@ -20,137 +20,34 @@ sealed interface ParseOutcome {
     data class Unparsed(val reason: String) : ParseOutcome
 }
 
+/**
+ * Reads a bank SMS by structure rather than by template: [SmsFieldReader] splits it into labelled
+ * values using the shared [SmsLexicon], each value's shape decides what it is, and weighted cues
+ * decide the message type. No rule depends on which bank sent the message.
+ */
 object TransactionParser {
-    const val PARSER_VERSION = 7
+    const val PARSER_VERSION = 8
 
     private const val UNKNOWN_MERCHANT = "Unknown"
     private const val ATM_MERCHANT = "ATM withdrawal"
     private const val TRANSFER_MERCHANT = "Transfer"
-    private const val CURRENCY_SEPARATOR = "[\\s\\u00A0\\u2007\\u202F:=]*"
+    private const val MIN_SKIP_WEIGHT = 5
 
-    private val currencyFirst = Regex(
-        "(?i)(EGP|SAR|AED|USD|ريال|جنيه|درهم)$CURRENCY_SEPARATOR" +
-            "([0-9][0-9,]*(?:\\.[0-9]{1,2})?)"
-    )
-    private val currencyLast = Regex(
-        "(?i)([0-9][0-9,]*(?:\\.[0-9]{1,2})?)$CURRENCY_SEPARATOR" +
-            "(EGP|SAR|AED|USD|ريال|جنيه|درهم)"
-    )
     private val plainAmount = Regex(
         "(?i)(?:amount|debit(?:ed)?|paid|payment|purchase|withdrawal|deducted|spent|charged)" +
             "[^0-9]{0,20}([0-9][0-9,]*(?:\\.[0-9]{1,2})?)"
     )
-    private val nonTransaction = listOf(
-        MessageType.DECLINED to Regex("(?i)\\b(declined|failed|not processed)\\b"),
-        MessageType.NOTICE to Regex(
-            "(?i)\\b(otp|one[- ]time password|verification code|security code|activation code|" +
-                "authentication code)\\b|كلمة مرور صالحة لمرة واحدة|رمز التحقق|رمز التفعيل|" +
-                "الرمز\\s*[0-9]+\\s*ل|تم تفعيل"
-        ),
-        MessageType.INTERNAL to Regex(
-            "(?i)\\b(between your accounts|between own accounts|internal transfer|" +
-                "credit card\\s*:\\s*payment|credit card payment|card\\s*:\\s*payment|" +
-                "card repayment|payment to (?:your )?(?:credit )?card|wallet top ?up|top[- ]?up|" +
-                "adding money to (?:your )?(?:account|wallet)|your payment of [^\\n]{0,30}? was successful)\\b|" +
-                "بين حساباتك|بين حساباتي|بين الحسابات|تم سداد بطاقتك|تسديد بطاقة|لحساب بطاقتك|" +
-                "(?:إئتمانية|ائتمانية|الائتمانية)\\s*:\\s*(?:تسديد|تأكيد السداد)"
-        ),
-        MessageType.STATEMENT to Regex(
-            "(?i)\\b(amount due|minimum due|total due|payment due|due date|" +
-                "statement(?: has been)? issued|statement date|closing balance|next billing date|" +
-                "monthly installment)\\b|كشف حساب|المبلغ المستحق|تاريخ الاستحقاق"
-        )
+    private val explicitPurchase = Regex("(?i)\\b(purchase|pos)\\b|شراء|نقاط البيع")
+    private val cardCue = Regex("(?i)\\b(pos|purchase|card|mada|visa|mastercard|pay)\\b|شراء|نقاط البيع|بطاقة|مدى")
+    private val compactDateMerchant = Regex(
+        "(?i)\\b[0-9]{2}(?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)[0-9]{2}\\s+" +
+            "(\\p{L}[\\p{L}0-9&.'*/ \\-]{1,40}?)\\s+(?:purchase\\s+)?(?:from\\s+)?[0-9]{3}-"
     )
-    private val withdrawal = Regex("(?i)\\b(atm|cash withdrawal|withdraw(?:al|n)?)\\b|سحب")
-    private val creditOrRefund = Regex(
-        "(?i)\\b(refund|refunded|credited|credit transfer|deposited|deposit received|" +
-            "deposit of|salary|cashback|reversal|reversed|received from|incoming transfer|" +
-            "you have received|received amount)\\b|واردة|وارده|إلى حسابك|الى حسابك|ايداع|إيداع|استرداد|إسترداد|استرجاع"
-    )
-    private val balanceLine = Regex(
-        "(?i)\\b(available balance|current balance|balance|credit limit|available limit|" +
-            "minimum due|total due|statement).*$"
-    )
-    private val transactionHint = Regex(
-        "(?i)\\b(amount|purchase|payment|paid|debit(?:ed)?|withdraw(?:al|n)?|deducted|" +
-            "spent|charged|transfer(?:red)?|pos|cheque|bill)\\b"
-    )
-    private const val MERCHANT_CHARS = "[\\p{L}0-9&.'×\\- ]{2,40}"
-    private const val LABEL_END = "(?:\\s*:\\s*|\\s+)"
-    private val merchantPatterns = listOf(
-        Regex(
-            "(?i)\\b[0-9]{2}(?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)[0-9]{2}\\s+" +
-                "(\\p{L}[\\p{L}0-9&.'*/ \\-]{1,40}?)\\s+(?:purchase\\s+)?(?:from\\s+)?[0-9]{3}-"
-        ),
-        Regex("(?i)\\bat$LABEL_END($MERCHANT_CHARS)"),
-        Regex("@\\s*($MERCHANT_CHARS)"),
-        Regex("(?i)\\bmerchant$LABEL_END($MERCHANT_CHARS)"),
-        Regex("(?:لدى|عند)$LABEL_END($MERCHANT_CHARS)"),
-        Regex("مفوتر\\s*:\\s*[0-9]*\\s*($MERCHANT_CHARS)"),
-        Regex("الجهة\\s*:\\s*($MERCHANT_CHARS)"),
-        Regex("(?:إلى|الى)\\s*:\\s*($MERCHANT_CHARS)"),
-        Regex("(?i)\\bto$LABEL_END($MERCHANT_CHARS)"),
-        Regex("(?i)\\bfrom$LABEL_END($MERCHANT_CHARS)"),
-        Regex("من\\s+($MERCHANT_CHARS)"),
-        Regex("في\\s+($MERCHANT_CHARS)")
-    )
-    private val merchantStop = Regex(
-        "(?i)\\s+(?:with ref\\w*|reference|is confirmed|your available|available|has been|بمبلغ|" +
-            "الرصيد|بتاريخ|بقيمة)\\b.*$|\\s+(?:بمبلغ|الرصيد|بتاريخ|بقيمة).*$"
-    )
-    private val genericMerchants = setOf("your account", "حسابك", "حسابكم", "حساب", "contact")
-    private val genericMerchantPrefixes = listOf("بطاقة", "حساب", "خلال")
+    private val maskedAnywhere = Regex("[*xX#•]{2,}[ \\t-]*([0-9]{3,6})(?![0-9])")
     private val datePatterns = listOf(
         Regex("\\b(\\d{4}-\\d{2}-\\d{2})\\b") to DateTimeFormatter.ISO_LOCAL_DATE,
         Regex("\\b(\\d{1,2}/(\\d{1,2})/(\\d{4}))\\b") to DateTimeFormatter.ofPattern("d/M/yyyy"),
         Regex("\\b(\\d{1,2}-(\\d{1,2})-(\\d{4}))\\b") to DateTimeFormatter.ofPattern("d-M-yyyy")
-    )
-    private val cardPatterns = listOf(
-        Regex(
-            "(?i)\\b(?:card|mada|visa|mastercard|google pay|apple pay)" +
-                "[^0-9\\n]{0,12}[*xX#]*([0-9]{3,6})(?![0-9/-]|:[0-9])"
-        ),
-        Regex("(?i)\\*{2,}[ \\t]*([0-9]{3,6})[^\\n]{0,12}\\b(?:mada|visa|mastercard)\\b"),
-        Regex("(?i)\\b(?:by|via)\\s*:?\\s*\\*+[ \\t]*([0-9]{3,6})"),
-        Regex("(?:بطاقة|بطاقتك)\\s*:?\\s*[^0-9\\n]{0,50}?([0-9]{3,6})(?![0-9/-]|:[0-9])"),
-        Regex("المنتهية\\s*(?:برقم)?\\s*[*xX#]*\\s*([0-9]{3,6})")
-    )
-    private val accountPatterns = listOf(
-        Regex(
-            "(?im)(?:^|\\n)\\s*(?:from|to)\\s*" +
-                "(?:no\\.?|number|ending|last)?\\s*[:#]\\s*" +
-                "[*xX#]*([0-9]{3,6})(?![0-9:/-])"
-        ),
-        Regex(
-            "(?i)\\b(?:account|a/c|acct)\\s*" +
-                "(?:no\\.?|number|ending|last)?\\s*[:#]\\s*" +
-                "[*xX#]*([0-9]{3,6})(?![0-9:/-])"
-        ),
-        Regex(
-            "(?i)\\b(?:from|to|account|a/c|acct)\\s*\\(?\\s*" +
-                "[*xX#]{1,}[ \\t]*([0-9]{3,6})(?![0-9:/-])"
-        ),
-        Regex(
-            "(?i)\\b(?:account|a/c|acct|from|to)\\s+" +
-                "(?:no\\.?|number|ending|last)\\s*[:#]?\\s*" +
-                "[*xX#]*([0-9]{3,6})(?![0-9:/-])"
-        ),
-        Regex(
-            "(?im)(?:^|\\n)\\s*(?:from|to)\\s+([0-9]{3,6})(?![0-9:/-])"
-        ),
-        Regex("(?i)\\b(?:from|account|a/c)\\s+[0-9-]*\\*{2,}-?([0-9]{3,6})(?![0-9])"),
-        Regex("(?m)(?:^|\\n)\\s*(?:من|إلى|الى)\\s*:\\s*[*xX#]*([0-9]{3,6})(?![0-9/-]|:[0-9])"),
-        Regex("(?:حسابك|حساب|الحساب)\\s*(?:رقم)?\\s*:?\\s*[*xX#]*([0-9]{3,6})(?![0-9/-]|:[0-9])")
-    )
-    private val maskedPattern = Regex("(?i)\\*{2,}[ \\t]*([0-9]{3,6})")
-    private val merchantSentenceBreak = Regex("\\.\\s+(?=[\\p{Lu}\\u0600-\\u06FF])")
-    private val cardContext = Regex(
-        "(?i)\\b(pos|purchase|online purchase|card|mada|visa|mastercard|" +
-            "google pay|apple pay|used at)\\b|شراء|نقاط البيع|بطاقة|بطاقتك"
-    )
-    private val accountContext = Regex(
-        "(?i)\\b(transfer|funds transfer|bill payment|sadad|sarie|standing order|" +
-            "direct debit|cheque|salary)\\b|حوالة|حواله|تحويل|سداد|فاتورة|قرض|تمويل"
     )
 
     fun parse(
@@ -168,7 +65,8 @@ object TransactionParser {
         model: SmsModel? = null
     ): ParseOutcome {
         val body = SmsText.clean(message.body)
-        val rule = classify(body)
+        val fields = SmsFieldReader.read(body)
+        val rule = classify(body, fields, defaultCurrency)
         val prediction = model?.predict(message.address, body, rule.type)
         val type = prediction?.type ?: rule.type
         if (!type.isSpending) {
@@ -176,24 +74,18 @@ object TransactionParser {
                 if (prediction == null) rule.skipReason ?: type.label else "${type.label} (learned)"
             )
         }
-        val amount = prediction?.amount?.let { learnedAmount(it, body, defaultCurrency) }
-            ?: extractAmount(body, defaultCurrency)
+        val amount = prediction?.amount?.let { learnedAmount(it, body, fields, defaultCurrency) }
+            ?: extractAmount(body, fields, defaultCurrency)
             ?: return ParseOutcome.Unparsed("Amount not found")
         val instrument = prediction?.instrument
             ?.let { learnedInstrument(it, body, message.address, instruments) }
-            ?: extractInstrument(body, message.address, instruments)
+            ?: extractInstrument(body, fields, type, message.address, instruments)
+        val merchant = prediction?.merchant ?: extractMerchant(body, fields, type, message.address)
         return ParseOutcome.Parsed(
             ParsedTransaction(
                 amountMinor = amount.first,
                 currency = amount.second,
-                merchant = prediction?.merchant ?: extractMerchant(body).let {
-                    when {
-                        it != UNKNOWN_MERCHANT -> it
-                        type == MessageType.WITHDRAWAL -> ATM_MERCHANT
-                        type == MessageType.BILL_OR_TRANSFER -> TRANSFER_MERCHANT
-                        else -> it
-                    }
-                },
+                merchant = merchant,
                 occurredAt = extractDate(body, message.date),
                 sourceAddress = message.address,
                 account = instrument.first,
@@ -203,37 +95,167 @@ object TransactionParser {
     }
 
     /** The rule-based message type, also the weak label the [SmsModel] trains on. */
-    fun ruleType(body: String): MessageType = classify(SmsText.clean(body)).type
+    fun ruleType(body: String): MessageType {
+        val clean = SmsText.clean(body)
+        return classify(clean, SmsFieldReader.read(clean), "EGP").type
+    }
+
+    fun instrumentKey(address: String, digits: String): String = "$address|$digits"
+
+    fun candidates(rawBody: String): List<InstrumentCandidate> {
+        val body = SmsText.clean(rawBody)
+        return instrumentCandidates(body, SmsFieldReader.read(body))
+    }
 
     private class RuleDecision(val type: MessageType, val skipReason: String? = null)
 
-    private fun classify(body: String): RuleDecision {
-        nonTransaction.firstOrNull { it.second.containsMatchIn(body) }?.let {
-            return RuleDecision(it.first, "Not a spending message")
+    private fun classify(body: String, fields: List<SmsField>, defaultCurrency: String): RuleDecision {
+        val present = SmsLexicon.typeCues
+            .filter { (_, cue) -> cue.second.containsMatchIn(body) }
+            .associate { (type, cue) -> type to cue.first }
+        val skip = SmsLexicon.typePrecedence
+            .filter { !it.isSpending && (present[it] ?: 0) >= MIN_SKIP_WEIGHT }
+            .maxByOrNull { present[it] ?: 0 }
+        if (skip != null) {
+            val reason = if (skip == MessageType.CREDIT) "Credit, refund or income" else "Not a spending message"
+            return RuleDecision(skip, reason)
         }
-        if (creditOrRefund.containsMatchIn(body)) {
-            return RuleDecision(MessageType.CREDIT, "Credit, refund or income")
-        }
-        if (extractAmount(body, "EGP") == null && !transactionHint.containsMatchIn(body)) {
+        val spendingCue = present.keys.any { it.isSpending }
+        val hasAmount = extractAmount(body, fields, defaultCurrency) != null
+        if (!hasAmount && (!spendingCue || SmsLexicon.advisory.containsMatchIn(body))) {
             return RuleDecision(MessageType.NOTICE, "No amount or spending hint")
         }
         return RuleDecision(
             when {
-                withdrawal.containsMatchIn(body) -> MessageType.WITHDRAWAL
-                accountContext.containsMatchIn(body) -> MessageType.BILL_OR_TRANSFER
+                MessageType.WITHDRAWAL in present -> MessageType.WITHDRAWAL
+                MessageType.BILL_OR_TRANSFER in present && !explicitPurchase.containsMatchIn(body) ->
+                    MessageType.BILL_OR_TRANSFER
                 else -> MessageType.PURCHASE
             }
         )
     }
 
+    private fun extractAmount(
+        body: String,
+        fields: List<SmsField>,
+        defaultCurrency: String
+    ): Pair<Long, String>? {
+        val excluded = fields.filter {
+            it.role in setOf(FieldRole.BALANCE, FieldRole.FEE, FieldRole.IGNORE, FieldRole.REFERENCE)
+        }.map { it.range }
+        val bodyCurrency = SmsFieldReader.amounts(body)
+            .firstOrNull { (_, _, range) -> excluded.none { range.first in it } }?.second
+        for (field in fields.filter { it.role == FieldRole.AMOUNT }) {
+            SmsFieldReader.amounts(field.value).firstOrNull()?.let { (number, currency, _) ->
+                return toAmount(number, currency)
+            }
+            Regex("^[0-9][0-9,]*(?:\\.[0-9]{1,3})?").find(field.value.trim())?.let { number ->
+                return toAmount(number.value, bodyCurrency ?: defaultCurrency)
+            }
+        }
+        SmsFieldReader.amounts(body)
+            .firstOrNull { (_, _, range) -> excluded.none { range.first in it } }
+            ?.let { (number, currency, _) -> return toAmount(number, currency) }
+        val plain = plainAmount.find(body)?.groupValues?.get(1) ?: return null
+        return toAmount(plain, defaultCurrency)
+    }
+
+    private fun toAmount(number: String, currency: String): Pair<Long, String>? {
+        val amount = number.replace(",", "").toBigDecimalOrNull() ?: return null
+        return amount.toMinorUnits() to currencyCode(currency)
+    }
+
+    private fun extractMerchant(
+        body: String,
+        fields: List<SmsField>,
+        type: MessageType,
+        sender: String
+    ): String {
+        val byRole = { role: FieldRole -> fields.filter { it.role == role && it.shape == ValueShape.TEXT } }
+        val ordered = if (type == MessageType.BILL_OR_TRANSFER) {
+            byRole(FieldRole.MERCHANT) + byRole(FieldRole.TO) + byRole(FieldRole.FROM) + byRole(FieldRole.IN)
+        } else {
+            byRole(FieldRole.MERCHANT) + byRole(FieldRole.FROM) + byRole(FieldRole.IN) + byRole(FieldRole.TO)
+        }
+        val fromFields = ordered.asSequence().map { it.value }
+        val fromLayout = compactDateMerchant.findAll(body).map { it.groupValues[1] }
+        for (candidate in fromFields + fromLayout) {
+            cleanMerchant(candidate, sender)?.let { return it }
+        }
+        return when (type) {
+            MessageType.WITHDRAWAL -> ATM_MERCHANT
+            MessageType.BILL_OR_TRANSFER -> TRANSFER_MERCHANT
+            else -> UNKNOWN_MERCHANT
+        }
+    }
+
+    private fun cleanMerchant(raw: String, sender: String): String? {
+        val cleaned = raw.replace(Regex("×+"), " ")
+            .replace(Regex("^[0-9]+\\s+"), "")
+            .replace(Regex("(?i)\\s+(?:is|was|were|has|have|will|had)\\s.*$"), "")
+            .replace(Regex("\\s+[0-9][0-9/:.-]*.*$"), "")
+            .replace(Regex("\\s+"), " ")
+            .take(40)
+            .trim()
+            .trim('.', ',', '-', '*', '/', ':')
+        if (cleaned.length < 2 || cleaned.none { it.isLetter() }) return null
+        if (cleaned.lowercase() in SmsLexicon.genericText) return null
+        if (SmsLexicon.genericText.any { cleaned.startsWith("$it ") }) return null
+        if (cleaned.equals(sender.trim(), ignoreCase = true)) return null
+        return cleaned
+    }
+
+    private fun instrumentCandidates(body: String, fields: List<SmsField>): List<InstrumentCandidate> {
+        val found = LinkedHashMap<String, TransactionChannel>()
+        fun add(digits: String?, channel: TransactionChannel) {
+            if (digits == null || digits.length !in 3..6) return
+            if (channel == TransactionChannel.CARD && digits.length > 4) return
+            found.putIfAbsent(digits, channel)
+        }
+        fields.forEach { field ->
+            when {
+                field.role == FieldRole.CARD ->
+                    add(SmsFieldReader.instrumentDigits(field.value), TransactionChannel.CARD)
+                field.role == FieldRole.ACCOUNT ->
+                    add(SmsFieldReader.instrumentDigits(field.value), TransactionChannel.ACCOUNT)
+                field.role in setOf(FieldRole.FROM, FieldRole.TO) && field.shape == ValueShape.MASKED_DIGITS ->
+                    add(SmsFieldReader.digitsOf(field.value), TransactionChannel.ACCOUNT)
+            }
+        }
+        if (found.isEmpty()) {
+            val channel = if (cardCue.containsMatchIn(body)) TransactionChannel.CARD else TransactionChannel.ACCOUNT
+            maskedAnywhere.findAll(body).forEach { add(it.groupValues[1], channel) }
+        }
+        return found.map { InstrumentCandidate(it.key, it.value) }
+    }
+
+    private fun extractInstrument(
+        body: String,
+        fields: List<SmsField>,
+        type: MessageType,
+        sender: String,
+        instruments: Map<String, TransactionChannel>
+    ): Pair<String, TransactionChannel> {
+        val candidates = instrumentCandidates(body, fields).map { candidate ->
+            val configured = instruments[instrumentKey(sender, candidate.digits)]
+            InstrumentCandidate(candidate.digits, configured ?: candidate.channel)
+        }
+        if (candidates.isEmpty()) return sender to TransactionChannel.OTHER
+        val target = if (type == MessageType.BILL_OR_TRANSFER) TransactionChannel.ACCOUNT else TransactionChannel.CARD
+        val chosen = candidates.firstOrNull { it.channel == target }
+            ?: candidates.firstOrNull { it.channel != TransactionChannel.OTHER }
+            ?: candidates.first()
+        return "$sender ${chosen.digits}" to chosen.channel
+    }
+
     private fun learnedAmount(
         token: String,
         body: String,
+        fields: List<SmsField>,
         defaultCurrency: String
     ): Pair<Long, String>? {
-        val amount = token.replace(",", "").toBigDecimalOrNull() ?: return null
-        val currency = extractAmount(body, defaultCurrency)?.second ?: defaultCurrency.uppercase()
-        return amount.toMinorUnits() to currency
+        val currency = extractAmount(body, fields, defaultCurrency)?.second ?: defaultCurrency.uppercase()
+        return toAmount(token, currency)
     }
 
     private fun learnedInstrument(
@@ -246,126 +268,6 @@ object TransactionParser {
             ?: candidates(body).firstOrNull { it.digits == digits }?.channel
             ?: TransactionChannel.OTHER
         return "$sender $digits" to channel
-    }
-
-    fun instrumentKey(address: String, digits: String): String = "$address|$digits"
-
-    fun candidates(rawBody: String): List<InstrumentCandidate> {
-        val body = SmsText.clean(rawBody)
-        val found = LinkedHashMap<String, Pair<TransactionChannel, Int>>()
-        fun add(
-            digits: String?,
-            channel: TransactionChannel,
-            priority: Int,
-            rejectYear: Boolean = false
-        ) {
-            val value = digits?.trim()
-            if (value.isNullOrEmpty() || value.length !in 3..6) return
-            if (channel == TransactionChannel.CARD && value.length > 4) return
-            if (rejectYear && value.length == 4 && value.toIntOrNull() in 1900..2100) return
-            val existing = found[value]
-            if (existing == null || priority > existing.second) {
-                found[value] = channel to priority
-            }
-        }
-
-        cardPatterns.forEach { pattern ->
-            pattern.findAll(body).forEach { add(it.groupValues[1], TransactionChannel.CARD, 2) }
-        }
-        accountPatterns.forEach { pattern ->
-            pattern.findAll(body).forEach {
-                add(it.groupValues[1], TransactionChannel.ACCOUNT, 2, rejectYear = true)
-            }
-        }
-        val hasCardContext = cardContext.containsMatchIn(body)
-        val hasAccountContext = accountContext.containsMatchIn(body)
-        val guessedCard = hasCardContext && !hasAccountContext
-        if (hasCardContext || hasAccountContext) {
-            maskedPattern.findAll(body).forEach {
-                add(
-                    it.groupValues[1],
-                    if (guessedCard) TransactionChannel.CARD else TransactionChannel.ACCOUNT,
-                    1,
-                    rejectYear = !guessedCard
-                )
-            }
-        }
-        return found.map { InstrumentCandidate(it.key, it.value.first) }
-    }
-
-    private fun extractInstrument(
-        body: String,
-        sender: String,
-        instruments: Map<String, TransactionChannel>
-    ): Pair<String, TransactionChannel> {
-        val candidates = candidates(body).map { candidate ->
-            val configured = instruments[instrumentKey(sender, candidate.digits)]
-            InstrumentCandidate(candidate.digits, configured ?: candidate.channel)
-        }
-        if (candidates.isEmpty()) return sender to TransactionChannel.OTHER
-        val target = if (accountContext.containsMatchIn(body)) {
-            TransactionChannel.ACCOUNT
-        } else {
-            TransactionChannel.CARD
-        }
-        val chosen = candidates.firstOrNull { it.channel == target }
-            ?: candidates.firstOrNull { it.channel != TransactionChannel.OTHER }
-            ?: candidates.first()
-        return "$sender ${chosen.digits}" to chosen.channel
-    }
-
-    private fun extractAmount(body: String, defaultCurrency: String): Pair<Long, String>? {
-        val lines = body.lines()
-            .map { balanceLine.replace(it, " ") }
-            .filter { it.isNotBlank() }
-        if (lines.isEmpty()) return null
-
-        val hinted = lines.filter { transactionHint.containsMatchIn(it) }
-        val candidates = hinted + lines.filterNot { transactionHint.containsMatchIn(it) }
-        for (line in candidates) {
-            val currencyMatch = currencyFirst.find(line) ?: currencyLast.find(line)
-            if (currencyMatch != null) {
-                val groups = currencyMatch.groupValues
-                val numberFirst = groups[1].firstOrNull()?.isDigit() == true
-                val currencyToken = if (numberFirst) groups[2] else groups[1]
-                val numberToken = if (numberFirst) groups[1] else groups[2]
-                val amount = numberToken.replace(",", "").toBigDecimalOrNull()
-                if (amount != null) return amount.toMinorUnits() to currencyCode(currencyToken)
-            }
-            val plain = plainAmount.find(line)?.groupValues?.get(1) ?: continue
-            val amount = plain.replace(",", "").toBigDecimalOrNull() ?: continue
-            return amount.toMinorUnits() to defaultCurrency.uppercase()
-        }
-        return null
-    }
-
-    private fun extractMerchant(body: String): String {
-        for (match in merchantPatterns.asSequence().flatMap { it.findAll(body) }) {
-            val raw = match.groupValues[1].trim()
-            val sentenceBreak = merchantSentenceBreak.find(raw)?.range?.first ?: raw.length
-            val cleaned = merchantStop.replace(raw.substring(0, sentenceBreak).replace(Regex("×+"), " "), "")
-                .replace(Regex("\\s+on\\s+.*$", RegexOption.IGNORE_CASE), "")
-                .replace(Regex("\\s+\\d+.*$"), "")
-                .replace(
-                    Regex(
-                        "\\s+for\\s+(?:SAR|EGP|AED|USD|ريال|جنيه|درهم)\\s*$",
-                        RegexOption.IGNORE_CASE
-                    ),
-                    ""
-                )
-                .replace(Regex("\\s+(?:to|from)$", RegexOption.IGNORE_CASE), "")
-                .trim()
-                .trim('.', ',', '-')
-            if (cleaned.length >= 2 &&
-                cleaned.any { it.isLetter() } &&
-                cleaned.lowercase() !in genericMerchants &&
-                genericMerchantPrefixes.none { cleaned.startsWith(it) } &&
-                !balanceLine.containsMatchIn(cleaned)
-            ) {
-                return cleaned
-            }
-        }
-        return UNKNOWN_MERCHANT
     }
 
     private fun extractDate(body: String, fallbackMillis: Long): Long {
@@ -385,10 +287,9 @@ object TransactionParser {
         movePointRight(2).setScale(0, RoundingMode.HALF_UP).longValueExact()
 
     private fun currencyCode(token: String): String = when (token.uppercase()) {
-        "EGP", "جنيه" -> "EGP"
+        "EGP", "جنيه", "ج.م", "جم" -> "EGP"
         "SAR", "ريال" -> "SAR"
         "AED", "درهم" -> "AED"
-        "USD" -> "USD"
         else -> token.uppercase()
     }
 }

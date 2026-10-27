@@ -114,7 +114,7 @@ class SmsModelTest {
 
     @Test
     fun `the classifier overrides the rules only for labelled types it is confident about`() {
-        val promo = "Get 20% off on purchase at Noon with your SAB card. T&C apply"
+        val promo = "Get 20% off on purchase at Noon with your SAB card"
         val history = (1..30).map { sms("Purchase of SAR $it.00 at Panda with card **1214") }
         val model = train(
             labels = listOf(MessageLabel("SAB", promo, MessageType.NOTICE)),
@@ -123,7 +123,7 @@ class SmsModelTest {
 
         val overridden = predict(
             model,
-            "Get 15% off on purchase at Jarir with your SAB card. Offer ends soon, T&C apply"
+            "Get 15% off on purchase at Jarir with your SAB card, ends soon"
         )
         val untouched = predict(model, "Purchase of SAR 44.00 at Danube with card **1214")
 
