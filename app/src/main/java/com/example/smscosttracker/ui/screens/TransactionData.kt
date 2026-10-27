@@ -38,6 +38,21 @@ fun rememberTransactions(
 }
 
 @Composable
+fun rememberPendingInstrumentKeys(
+    repository: TransactionRepository,
+    refreshKey: Int
+): Set<String> {
+    var keys by remember { mutableStateOf<Set<String>>(emptySet()) }
+    LaunchedEffect(refreshKey) {
+        thread {
+            val loaded = repository.pendingInstrumentKeys()
+            Handler(Looper.getMainLooper()).post { keys = loaded }
+        }
+    }
+    return keys
+}
+
+@Composable
 fun rememberPendingCount(
     repository: TransactionRepository,
     refreshKey: Int

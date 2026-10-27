@@ -1,7 +1,10 @@
 package com.example.smscosttracker.classification
 
 import java.util.Locale
+import kotlin.math.exp
 import kotlin.math.ln
+
+data class Classification(val category: Category, val confidence: Double)
 
 class CategoryClassifier(
     seed: Map<Category, List<String>> = SeedData.examples,
@@ -23,22 +26,22 @@ class CategoryClassifier(
         }
     }
 
-    fun classify(merchant: String): Category {
+    fun classify(merchant: String): Category = classifyWithConfidence(merchant).category
+
+    /** Category plus a 0..1 confidence; corrections are certain, merchants with no known words score 0. */
+    fun classifyWithConfidence(merchant: String): Classification {
         val normalized = normalizeMerchant(merchant)
-        if (normalized.isEmpty()) return Category.OTHER
-        overrides[normalized]?.let { return it }
+        if (normalized.isEmpty()) return Classification(Category.OTHER, 0.0)
+        overrides[normalized]?.let { return Classification(it, 1.0) }
 
         val tokens = tokenize(normalized)
-        if (tokens.isEmpty()) return Category.OTHER
-        if (tokens.none { it in vocabulary }) return Category.OTHER
+        if (tokens.isEmpty()) return Classification(Category.OTHER, 0.0)
+        if (tokens.none { it in vocabulary }) return Classification(Category.OTHER, 0.0)
 
         val totalDocuments = documentCounts.values.sum().coerceAtLeast(1)
         val categoryCount = Category.entries.size
-        var best = Category.OTHER
-        var bestScore = Double.NEGATIVE_INFINITY
-
-        for (category in Category.entries) {
-            val vocabularySize = vocabulary.size.coerceAtLeast(1)
+        val vocabularySize = vocabulary.size.coerceAtLeast(1)
+        val scores = Category.entries.associateWith { category ->
             val categoryTokens = tokenCounts[category]?.values?.sum() ?: 0
             var score = ln(
                 ((documentCounts[category] ?: 0) + 1.0) / (totalDocuments + categoryCount)
@@ -47,12 +50,12 @@ class CategoryClassifier(
                 val count = tokenCounts[category]?.get(token) ?: 0
                 score += ln((count + 1.0) / (categoryTokens + vocabularySize))
             }
-            if (score > bestScore) {
-                bestScore = score
-                best = category
-            }
+            score
         }
-        return best
+        val ranked = scores.entries.sortedByDescending { it.value }
+        val (best, runnerUp) = ranked[0] to ranked[1]
+        // How clearly the best category beats the runner-up: about 0.5 when torn between two.
+        return Classification(best.key, 1.0 / (1.0 + exp(runnerUp.value - best.value)))
     }
 
     private fun train(text: String, category: Category) {

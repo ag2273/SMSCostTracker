@@ -42,6 +42,7 @@ import com.example.smscosttracker.analysis.DatePreset
 import com.example.smscosttracker.analysis.HomeFilterState
 import com.example.smscosttracker.analysis.HomePeriodUnit
 import com.example.smscosttracker.analysis.SpendingAnalysis
+import com.example.smscosttracker.analysis.TransactionReview
 import com.example.smscosttracker.analysis.TransactionFilterState
 import com.example.smscosttracker.analysis.TransactionFilters
 import com.example.smscosttracker.classification.Category
@@ -81,10 +82,15 @@ fun HomeScreen(
     onFilterChange: (HomeFilterState) -> Unit,
     onOpenInstruments: () -> Unit,
     onOpenActivity: () -> Unit,
+    onOpenReview: () -> Unit,
     onImport: () -> Unit
 ) {
     val state = rememberTransactions(repository, refreshKey)
     val pending = rememberPendingCount(repository, refreshKey)
+    val pendingKeys = rememberPendingInstrumentKeys(repository, refreshKey)
+    val reviewCount = remember(state.transactions, pendingKeys) {
+        state.transactions.count { TransactionReview.needsReview(it, pendingKeys) }
+    }
     val currencies = remember(state.transactions) {
         state.transactions.map { it.currency }.filter { it.isNotBlank() }.distinct().sorted()
     }
@@ -202,6 +208,14 @@ fun HomeScreen(
                         title = "$pending card/account values need review",
                         body = "Confirm them to improve this period's totals.",
                         onClick = onOpenInstruments,
+                        modifier = Modifier.padding(top = 12.dp)
+                    )
+                }
+                if (reviewCount > 0) {
+                    ReviewBanner(
+                        title = "$reviewCount transactions need review",
+                        body = "Low-confidence categories, unknown merchants or unconfirmed cards.",
+                        onClick = onOpenReview,
                         modifier = Modifier.padding(top = 12.dp)
                     )
                 }
