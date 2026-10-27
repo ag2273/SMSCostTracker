@@ -14,7 +14,8 @@ data class SmsThread(
 
 object SmsReader {
     fun readThreads(context: Context): List<SmsThread> {
-        val threads = mutableListOf<SmsThread>()
+        val latest = LinkedHashMap<Long, SmsThread>()
+        val counts = HashMap<Long, Int>()
         val projection = arrayOf(
             Telephony.Sms.THREAD_ID,
             Telephony.Sms.ADDRESS,
@@ -28,37 +29,24 @@ object SmsReader {
             null,
             "${Telephony.Sms.DATE} DESC"
         )?.use { cursor ->
-            val seen = HashSet<Long>()
             val threadColumn = cursor.getColumnIndexOrThrow(Telephony.Sms.THREAD_ID)
             val addressColumn = cursor.getColumnIndexOrThrow(Telephony.Sms.ADDRESS)
             val bodyColumn = cursor.getColumnIndexOrThrow(Telephony.Sms.BODY)
             val dateColumn = cursor.getColumnIndexOrThrow(Telephony.Sms.DATE)
             while (cursor.moveToNext()) {
                 val threadId = cursor.getLong(threadColumn)
-                if (!seen.add(threadId)) continue
-                threads += SmsThread(
+                counts.merge(threadId, 1, Int::plus)
+                if (threadId in latest) continue
+                latest[threadId] = SmsThread(
                     threadId = threadId,
                     address = cursor.getString(addressColumn) ?: "",
-                    messageCount = countMessages(context, threadId),
+                    messageCount = 0,
                     snippet = cursor.getString(bodyColumn) ?: "",
                     lastDate = cursor.getLong(dateColumn)
                 )
             }
         }
-        return threads
-    }
-
-    private fun countMessages(context: Context, threadId: Long): Int {
-        context.contentResolver.query(
-            Telephony.Sms.CONTENT_URI,
-            arrayOf(Telephony.Sms._ID),
-            "${Telephony.Sms.THREAD_ID} = ?",
-            arrayOf(threadId.toString()),
-            null
-        )?.use { cursor ->
-            return cursor.count
-        }
-        return 0
+        return latest.values.map { it.copy(messageCount = counts[it.threadId] ?: 0) }
     }
 
     fun readMessages(context: Context, threadId: Long): List<RawSms> {

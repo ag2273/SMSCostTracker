@@ -65,4 +65,32 @@ class DeduplicatorTest {
         val batch = listOf(candidate(), candidate(time = now + 60_000L))
         assertEquals(1, Deduplicator.dedupe(batch, emptyList()).size)
     }
+
+    @Test
+    fun `bucketed dedupe matches pairwise comparison and is fast on large histories`() {
+        val random = java.util.Random(42)
+        val merchants = listOf("Carrefour", "Panda", "Jarir", "Unknown", "", "STC")
+        fun randomTime() = now + random.nextInt(60 * 24) * 60_000L * 30
+        val existing = (1..10_000).map {
+            existing(random.nextInt(500).toLong() * 100, merchants[random.nextInt(merchants.size)], randomTime())
+        }
+        val candidates = (1..10_000).map {
+            candidate(random.nextInt(500).toLong() * 100, merchants[random.nextInt(merchants.size)], randomTime())
+        }
+
+        val start = System.nanoTime()
+        val accepted = Deduplicator.dedupe(candidates, existing)
+        val elapsedMs = (System.nanoTime() - start) / 1_000_000
+
+        val expected = mutableListOf<ParsedTransaction>()
+        for (candidate in candidates) {
+            val duplicate = existing.any { Deduplicator.isDuplicate(candidate, it) } ||
+                expected.any { Deduplicator.isDuplicate(candidate, it.asEntity()) }
+            if (!duplicate) expected += candidate
+        }
+        assertEquals(expected, accepted)
+        assertTrue("dedupe took $elapsedMs ms", elapsedMs < 1_000)
+    }
+
+    private fun ParsedTransaction.asEntity() = existing(amountMinor, merchant, occurredAt)
 }
