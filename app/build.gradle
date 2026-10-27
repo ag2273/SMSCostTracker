@@ -48,7 +48,7 @@ android {
     }
     kotlinOptions { jvmTarget = '17' }
     lint {
-        abortOnError false
+        abortOnError true
         textReport true
         textOutput file('build/reports/lint-results-release.txt')
         checkReleaseBuilds false
