@@ -75,6 +75,6 @@ class CategoryClassifier(
     companion object {
         private val TOKEN = Regex("[\\p{L}\\p{N}]+")
 
-        fun normalizeMerchant(text: String): String = text.trim().lowercase(Locale.ROOT)
+        fun normalizeMerchant(text: String): String = MerchantNames.key(text)
     }
 }

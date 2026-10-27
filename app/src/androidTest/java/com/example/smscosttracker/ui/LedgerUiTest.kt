@@ -18,7 +18,9 @@ import com.example.smscosttracker.analysis.ActivityFilterState
 import com.example.smscosttracker.data.AppDatabase
 import com.example.smscosttracker.data.RawSmsEntity
 import com.example.smscosttracker.data.TransactionEntity
+import com.example.smscosttracker.data.TransactionImporter
 import com.example.smscosttracker.data.TransactionRepository
+import com.example.smscosttracker.classification.MerchantNames
 import com.example.smscosttracker.ml.MessageType
 import com.example.smscosttracker.ui.screens.ActivityScreen
 import com.example.smscosttracker.ui.sheets.MessageLabelSheet
@@ -188,5 +190,25 @@ class LedgerUiTest {
             compose.onAllNodes(hasText("Panda")).fetchSemanticsNodes().isEmpty()
         }
         compose.onNodeWithText("Zxqv Trading").assertExists()
+    }
+
+    @Test
+    fun merchantVariantsShareOneNameAndMergesSurviveReparse() {
+        storeSms("Purchase of SAR 10.00 at AMAZON.SA on 01/10/2026")
+        storeSms("Purchase of SAR 12.00 at Amazon SA Riyadh on 02/10/2026")
+        storeSms("Purchase of SAR 30.00 at STCPAY Wallet on 03/10/2026")
+        storeSms("Purchase of SAR 40.00 at STC Pay on 04/10/2026")
+        val importer = TransactionImporter(database)
+        importer.rebuildFromStored()
+
+        val names = database.transactionDao().getAll().map { it.merchant }.toSet()
+        assertEquals(1, names.count { MerchantNames.key(it) == "amazon" })
+
+        val wallet = database.transactionDao().getAll().first { it.merchant.startsWith("STCPAY") }
+        repository.mergeMerchant(wallet, "STC Pay")
+        importer.rebuildFromStored()
+
+        assertTrue(database.transactionDao().getAll().none { it.merchant.startsWith("STCPAY") })
+        assertEquals(2, database.transactionDao().getAll().count { it.merchant == "STC Pay" })
     }
 }

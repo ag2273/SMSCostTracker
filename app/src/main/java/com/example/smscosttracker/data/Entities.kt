@@ -47,6 +47,13 @@ data class MessageLabelEntity(
     val updatedAt: Long
 )
 
+@Entity(tableName = "merchant_aliases")
+data class MerchantAliasEntity(
+    @PrimaryKey val aliasKey: String,
+    val merchant: String,
+    val updatedAt: Long
+)
+
 @Entity(tableName = "instruments", primaryKeys = ["address", "digits"])
 data class InstrumentEntity(
     val address: String,

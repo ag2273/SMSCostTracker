@@ -21,7 +21,7 @@ sealed interface ParseOutcome {
 }
 
 object TransactionParser {
-    const val PARSER_VERSION = 5
+    const val PARSER_VERSION = 6
 
     private const val UNKNOWN_MERCHANT = "Unknown"
     private const val CURRENCY_SEPARATOR = "[\\s\\u00A0\\u2007\\u202F:=]*"

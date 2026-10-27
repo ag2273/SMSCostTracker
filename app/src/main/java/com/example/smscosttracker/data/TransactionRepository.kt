@@ -2,6 +2,7 @@ package com.example.smscosttracker.data
 
 import com.example.smscosttracker.classification.Category
 import com.example.smscosttracker.classification.CategoryClassifier
+import com.example.smscosttracker.classification.MerchantNames
 import com.example.smscosttracker.ml.MessageType
 import com.example.smscosttracker.ml.SmsModel
 import com.example.smscosttracker.parsing.ParseOutcome
@@ -121,6 +122,38 @@ class TransactionRepository(private val database: AppDatabase) {
 
     fun clearMessageLabel(rawSmsId: Long): ImportResult {
         database.messageLabelDao().delete(rawSmsId)
+        return TransactionImporter(database).rebuildFromStored()
+    }
+
+    /** Distinct merchant names, most used first, for the "Same merchant as" picker. */
+    fun merchantNames(): List<String> =
+        database.transactionDao().getAll()
+            .map { it.merchant }
+            .filterNot { it.isBlank() || it.equals("Unknown", ignoreCase = true) }
+            .groupingBy { it }
+            .eachCount()
+            .entries
+            .sortedWith(compareByDescending<Map.Entry<String, Int>> { it.value }.thenBy { it.key })
+            .map { it.key }
+
+    fun hasMerges(merchant: String): Boolean =
+        database.merchantAliasDao().getAll().any { it.merchant == merchant }
+
+    /** Treats [transaction]'s merchant as [target] from now on, then re-reads stored SMS. */
+    fun mergeMerchant(transaction: TransactionEntity, target: String): ImportResult {
+        database.merchantAliasDao().upsert(
+            MerchantAliasEntity(
+                aliasKey = MerchantNames.key(transaction.merchant),
+                merchant = target,
+                updatedAt = System.currentTimeMillis()
+            )
+        )
+        return TransactionImporter(database).rebuildFromStored()
+    }
+
+    /** Removes the user's merges into or out of [transaction]'s merchant, then re-reads stored SMS. */
+    fun undoMerchantMerges(transaction: TransactionEntity): ImportResult {
+        database.merchantAliasDao().deleteFor(transaction.merchant, MerchantNames.key(transaction.merchant))
         return TransactionImporter(database).rebuildFromStored()
     }
 
