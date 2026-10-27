@@ -27,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.example.smscosttracker.analysis.ActivityFilterState
+import com.example.smscosttracker.analysis.DatePreset
 import com.example.smscosttracker.analysis.HomeFilterState
 import com.example.smscosttracker.data.AppDatabase
 import com.example.smscosttracker.data.OnboardingPreferences
@@ -193,6 +194,15 @@ private fun MainShell(
                         settingsRoute = SettingsRoute.INSTRUMENTS
                     },
                     onOpenActivity = { tab = 1 },
+                    onOpenReview = {
+                        activityFilters = activityFilters.copy(
+                            filter = activityFilters.filter.copy(
+                                preset = DatePreset.ALL,
+                                needsReview = true
+                            )
+                        )
+                        tab = 1
+                    },
                     onImport = {
                         tab = 3
                         settingsRoute = SettingsRoute.REIMPORT

@@ -140,6 +140,7 @@ class TransactionImporter(
                 .associate { it.merchantKey to it.category }
         )
         accepted.forEach { candidate ->
+            val classification = classifier.classifyWithConfidence(candidate.merchant)
             database.transactionDao().insert(
                 TransactionEntity(
                     amountMinor = candidate.amountMinor,
@@ -147,7 +148,8 @@ class TransactionImporter(
                     merchant = candidate.merchant,
                     occurredAt = candidate.occurredAt,
                     sourceAddress = candidate.sourceAddress,
-                    category = classifier.classify(candidate.merchant).displayName,
+                    category = classification.category.displayName,
+                    categoryConfidence = classification.confidence,
                     account = candidate.account,
                     channel = candidate.channel.name
                 )

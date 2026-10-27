@@ -62,7 +62,11 @@ class LedgerUiTest {
         return database.rawSmsDao().find("SAB", body)!!
     }
 
-    private fun storeTransaction(merchant: String, amountMinor: Long): TransactionEntity {
+    private fun storeTransaction(
+        merchant: String,
+        amountMinor: Long,
+        confidence: Double = 0.9
+    ): TransactionEntity {
         val id = database.transactionDao().insert(
             TransactionEntity(
                 amountMinor = amountMinor,
@@ -70,7 +74,8 @@ class LedgerUiTest {
                 merchant = merchant,
                 occurredAt = now,
                 sourceAddress = "SAB",
-                category = "Shopping"
+                category = "Shopping",
+                categoryConfidence = confidence
             )
         )
         return database.transactionDao().getAll().first { it.id == id }
@@ -156,5 +161,32 @@ class LedgerUiTest {
         }
         // The search field holds "Jarir" too, so the row makes it at least two nodes.
         assertTrue(compose.onAllNodes(hasText("Jarir")).fetchSemanticsNodes().size >= 2)
+    }
+
+    @Test
+    fun needsReviewChipShowsOnlyUncertainTransactions() {
+        storeTransaction("Panda", 1_000, confidence = 0.95)
+        storeTransaction("Zxqv Trading", 2_000, confidence = 0.3)
+
+        compose.setContent {
+            SmsCostTrackerTheme {
+                var filters by remember { mutableStateOf(ActivityFilterState()) }
+                ActivityScreen(
+                    repository = repository,
+                    refreshKey = 0,
+                    filters = filters,
+                    onFiltersChange = { filters = it },
+                    onDataChanged = {}
+                )
+            }
+        }
+
+        waitForText("Needs review · 1")
+        compose.onNodeWithText("Needs review · 1").performClick()
+
+        compose.waitUntil(timeoutMillis = 5_000) {
+            compose.onAllNodes(hasText("Panda")).fetchSemanticsNodes().isEmpty()
+        }
+        compose.onNodeWithText("Zxqv Trading").assertExists()
     }
 }

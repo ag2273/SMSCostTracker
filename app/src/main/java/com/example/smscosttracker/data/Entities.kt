@@ -26,7 +26,9 @@ data class TransactionEntity(
     val sourceAddress: String,
     val category: String,
     val account: String = "",
-    val channel: String = ""
+    val channel: String = "",
+    /** Classifier probability for [category]; 1.0 after a correction, -1.0 when unknown. */
+    val categoryConfidence: Double = -1.0
 )
 
 @Entity(tableName = "category_corrections")

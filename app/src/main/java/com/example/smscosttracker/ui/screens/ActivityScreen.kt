@@ -39,11 +39,11 @@ import com.example.smscosttracker.analysis.ActivityFilterState
 import com.example.smscosttracker.analysis.DatePreset
 import com.example.smscosttracker.analysis.TransactionFilterState
 import com.example.smscosttracker.analysis.TransactionFilters
+import com.example.smscosttracker.analysis.TransactionReview
 import com.example.smscosttracker.classification.Category
 import com.example.smscosttracker.data.TransactionChannel
 import com.example.smscosttracker.data.TransactionEntity
 import com.example.smscosttracker.data.TransactionRepository
-import com.example.smscosttracker.parsing.TransactionParser
 import com.example.smscosttracker.ui.components.Avatar
 import com.example.smscosttracker.ui.components.ChannelIcon
 import com.example.smscosttracker.ui.components.DropdownChip
@@ -120,8 +120,15 @@ fun ActivityScreen(
         }
     }
 
-    val filtered = remember(state.transactions, filter) {
-        TransactionFilters.apply(state.transactions, filter)
+    val filtered = remember(state.transactions, filter, pendingKeys) {
+        TransactionFilters.apply(state.transactions, filter, pendingInstrumentKeys = pendingKeys)
+    }
+    val reviewCount = remember(state.transactions, filter, pendingKeys) {
+        TransactionFilters.apply(
+            state.transactions,
+            filter.copy(needsReview = true),
+            pendingInstrumentKeys = pendingKeys
+        ).size
     }
     val grouped = remember(filtered) {
         filtered
@@ -199,6 +206,14 @@ fun ActivityScreen(
                     )
                 }
             }
+            if (reviewCount > 0 || filter.needsReview) {
+                Spacer(Modifier.height(8.dp))
+                LedgerChip(
+                    text = "Needs review · $reviewCount",
+                    selected = filter.needsReview,
+                    onClick = { updateFilter(filter.copy(needsReview = !filter.needsReview)) }
+                )
+            }
             Spacer(Modifier.height(6.dp))
             if (state.loading) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -225,7 +240,7 @@ fun ActivityScreen(
                                         rows.forEachIndexed { index, transaction ->
                                             ActivityRow(
                                                 transaction = transaction,
-                                                isPending = transaction.isPending(pendingKeys),
+                                                needsReview = TransactionReview.needsReview(transaction, pendingKeys),
                                                 onClick = { detail = transaction }
                                             )
                                             if (index != rows.lastIndex) {
@@ -297,13 +312,8 @@ private fun countFilters(filter: TransactionFilterState, firstCurrency: String?)
     if (filter.account != null) count++
     if (filter.currency != null && filter.currency != firstCurrency) count++
     if (filter.merchantQuery.isNotBlank()) count++
+    if (filter.needsReview) count++
     return count
-}
-
-private fun TransactionEntity.isPending(pendingKeys: Set<String>): Boolean {
-    val digits = account.substringAfterLast(' ').trim()
-    if (digits.isEmpty()) return false
-    return TransactionParser.instrumentKey(sourceAddress, digits) in pendingKeys
 }
 
 @Composable
@@ -337,7 +347,7 @@ private fun DateGroupHeader(date: LocalDate, rows: List<TransactionEntity>) {
 @Composable
 private fun ActivityRow(
     transaction: TransactionEntity,
-    isPending: Boolean,
+    needsReview: Boolean,
     onClick: () -> Unit
 ) {
     val channel = TransactionChannel.fromStorage(transaction.channel)
@@ -380,7 +390,7 @@ private fun ActivityRow(
                     style = MaterialTheme.typography.labelMedium,
                     color = Ledger.Ink
                 )
-                if (isPending) {
+                if (needsReview) {
                     Pill("Review", PillTone.Accent)
                 }
             }

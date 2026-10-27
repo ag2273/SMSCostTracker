@@ -1,6 +1,7 @@
 package com.example.smscosttracker.classification
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CategoryClassifierTest {
@@ -50,5 +51,35 @@ class CategoryClassifierTest {
         )
 
         assertEquals(Category.SHOPPING, corrected.classify("Blorp Store"))
+    }
+
+    @Test
+    fun `confidence is a probability for seeded merchants`() {
+        val result = CategoryClassifier().classifyWithConfidence("Carrefour Hypermarket")
+
+        assertEquals(Category.GROCERIES, result.category)
+        assertTrue("confidence ${result.confidence}", result.confidence > 0.5 && result.confidence < 1.0)
+    }
+
+    @Test
+    fun `unknown merchants have zero confidence`() {
+        val result = CategoryClassifier().classifyWithConfidence("Zxqv Ltd")
+
+        assertEquals(Category.OTHER, result.category)
+        assertEquals(0.0, result.confidence, 0.0)
+    }
+
+    @Test
+    fun `corrected merchants are certain`() {
+        val corrected = CategoryClassifier(corrections = mapOf("jarir bookstore" to Category.SHOPPING.name))
+
+        assertEquals(1.0, corrected.classifyWithConfidence("Jarir Bookstore").confidence, 0.0)
+    }
+
+    @Test
+    fun `merchants pointing at two categories get low confidence`() {
+        val result = CategoryClassifier().classifyWithConfidence("Carrefour Pharmacy")
+
+        assertTrue("confidence ${result.confidence}", result.confidence < 0.6)
     }
 }

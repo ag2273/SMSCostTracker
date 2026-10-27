@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.dp
 import com.example.smscosttracker.analysis.DatePreset
 import com.example.smscosttracker.analysis.TransactionFilterState
 import com.example.smscosttracker.analysis.TransactionFilters
+import com.example.smscosttracker.analysis.TransactionReview
 import com.example.smscosttracker.classification.Category
 import com.example.smscosttracker.data.InstrumentCandidate
 import com.example.smscosttracker.data.MessageLabelEntity
@@ -491,7 +492,14 @@ fun TransactionDetailSheet(
                     }
                     Spacer(Modifier.height(10.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        ParsedField("CATEGORY", Category.fromStorage(transaction.category).displayName, Modifier.weight(1f))
+                        ParsedField(
+                            "CATEGORY",
+                            listOfNotNull(
+                                Category.fromStorage(transaction.category).displayName,
+                                TransactionReview.confidenceLabel(transaction)
+                            ).joinToString(" · "),
+                            Modifier.weight(1f)
+                        )
                         ParsedField(
                             "INSTRUMENT",
                             if (transaction.account.isBlank()) "Unknown" else transaction.account,

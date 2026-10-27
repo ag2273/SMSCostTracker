@@ -26,7 +26,8 @@ data class TransactionFilterState(
     val currency: String? = null,
     val merchantQuery: String = "",
     val customStart: LocalDate? = null,
-    val customEnd: LocalDate? = null
+    val customEnd: LocalDate? = null,
+    val needsReview: Boolean = false
 )
 
 object TransactionFilters {
@@ -42,7 +43,8 @@ object TransactionFilters {
         transactions: List<TransactionEntity>,
         state: TransactionFilterState,
         now: Long = System.currentTimeMillis(),
-        zone: ZoneId = ZoneId.systemDefault()
+        zone: ZoneId = ZoneId.systemDefault(),
+        pendingInstrumentKeys: Set<String> = emptySet()
     ): List<TransactionEntity> {
         val range = rangeFor(state, now, zone)
         return transactions.filter { transaction ->
@@ -54,7 +56,9 @@ object TransactionFilters {
             val inCurrency = state.currency == null || transaction.currency == state.currency
             val matchesMerchant = state.merchantQuery.isBlank() ||
                 transaction.merchant.contains(state.merchantQuery.trim(), ignoreCase = true)
-            inRange && inCategory && inAccount && inCurrency && matchesMerchant
+            val reviewMatches = !state.needsReview ||
+                TransactionReview.needsReview(transaction, pendingInstrumentKeys)
+            inRange && inCategory && inAccount && inCurrency && matchesMerchant && reviewMatches
         }
     }
 
