@@ -1,6 +1,8 @@
 package com.example.smscosttracker.data
 
 import com.example.smscosttracker.classification.CategoryClassifier
+import com.example.smscosttracker.classification.MerchantGroups
+import com.example.smscosttracker.classification.MerchantNames
 import com.example.smscosttracker.parsing.Deduplicator
 import com.example.smscosttracker.parsing.ParseOutcome
 import com.example.smscosttracker.parsing.TransactionParser
@@ -133,11 +135,23 @@ class TransactionImporter(
     }
 
     private fun store(parsed: List<ParsedTransaction>): Int {
-        val existing = database.transactionDao().getAll()
-        val accepted = Deduplicator.dedupe(parsed, existing)
+        val stored = database.transactionDao().getAll()
+        val groups = MerchantGroups(
+            names = stored.map { it.merchant } + parsed.map { it.merchant },
+            aliases = database.merchantAliasDao().getAll().associate { it.aliasKey to it.merchant }
+        )
+        stored.map { it.merchant }.distinct().forEach { name ->
+            val display = groups.displayName(name)
+            if (display != name) database.transactionDao().renameMerchant(name, display)
+        }
+        val existing = stored.map { it.copy(merchant = groups.displayName(it.merchant)) }
+        val candidates = parsed.map { it.copy(merchant = groups.displayName(it.merchant)) }
+        val accepted = Deduplicator.dedupe(candidates, existing)
         val classifier = CategoryClassifier(
-            corrections = database.categoryCorrectionDao().getAll()
-                .associate { it.merchantKey to it.category }
+            corrections = database.categoryCorrectionDao().getAll().associate { correction ->
+                val key = MerchantNames.key(correction.merchantKey)
+                (groups.displayNameForKey(key)?.let(MerchantNames::key) ?: key) to correction.category
+            }
         )
         accepted.forEach { candidate ->
             val classification = classifier.classifyWithConfidence(candidate.merchant)

@@ -392,6 +392,8 @@ fun TransactionDetailSheet(
     var showInstruments by remember { mutableStateOf(false) }
     var label by remember { mutableStateOf<MessageLabelEntity?>(null) }
     var labelling by remember { mutableStateOf<RawSmsEntity?>(null) }
+    var merging by remember { mutableStateOf(false) }
+    var merged by remember { mutableStateOf(false) }
     val formatter = remember {
         DateTimeFormatter.ofPattern("d MMM yyyy · HH:mm", Locale.ENGLISH)
             .withZone(ZoneId.systemDefault())
@@ -402,13 +404,27 @@ fun TransactionDetailSheet(
             val loadedMessages = repository.sourceMessagesFor(transaction)
             val loadedCandidates = repository.candidateInstruments(transaction)
             val loadedLabel = loadedMessages.firstOrNull()?.let { repository.messageLabel(it.id) }
+            val loadedMerged = repository.hasMerges(transaction.merchant)
             Handler(Looper.getMainLooper()).post {
                 messages = loadedMessages
                 candidates = loadedCandidates
                 label = loadedLabel
+                merged = loadedMerged
                 loading = false
             }
         }
+    }
+
+    if (merging) {
+        MerchantMergeSheet(
+            transaction = transaction,
+            repository = repository,
+            onDismiss = { merging = false },
+            onSaved = {
+                merging = false
+                onChanged()
+            }
+        )
     }
 
     labelling?.let { message ->
@@ -623,6 +639,23 @@ fun TransactionDetailSheet(
                 onClick = { showInstruments = !showInstruments },
                 modifier = Modifier.padding(top = 8.dp)
             )
+            SecondaryButton(
+                text = "Same merchant as…",
+                onClick = { merging = true },
+                modifier = Modifier.padding(top = 8.dp)
+            )
+            if (merged) {
+                LedgerTextButton(
+                    text = "Undo merges into ${transaction.merchant}",
+                    onClick = {
+                        thread {
+                            repository.undoMerchantMerges(transaction)
+                            Handler(Looper.getMainLooper()).post { onChanged() }
+                        }
+                    },
+                    modifier = Modifier.align(Alignment.CenterHorizontally)
+                )
+            }
             if (messages.isNotEmpty()) {
                 SecondaryButton(
                     text = "Fix how this SMS is read",
@@ -631,6 +664,104 @@ fun TransactionDetailSheet(
                 )
             }
             Spacer(Modifier.height(10.dp))
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun MerchantMergeSheet(
+    transaction: TransactionEntity,
+    repository: TransactionRepository,
+    onDismiss: () -> Unit,
+    onSaved: () -> Unit
+) {
+    var names by remember { mutableStateOf<List<String>>(emptyList()) }
+    var query by remember { mutableStateOf("") }
+    var selected by remember { mutableStateOf<String?>(null) }
+    var saving by remember { mutableStateOf(false) }
+
+    LaunchedEffect(transaction.id) {
+        thread {
+            val loaded = repository.merchantNames().filterNot { it == transaction.merchant }
+            Handler(Looper.getMainLooper()).post { names = loaded }
+        }
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = Ledger.Background,
+        tonalElevation = 0.dp,
+        dragHandle = null,
+        shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 28.dp)
+        ) {
+            SheetHeader(
+                title = "Same merchant as…",
+                subtitle = transaction.merchant,
+                onClose = onDismiss
+            )
+            Spacer(Modifier.height(12.dp))
+            LedgerTextField(
+                value = query,
+                onValueChange = { query = it },
+                placeholder = "Search merchants",
+                leadingIcon = Icons.Outlined.Search
+            )
+            Spacer(Modifier.height(10.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                names.filter { query.isBlank() || it.contains(query.trim(), ignoreCase = true) }
+                    .take(30)
+                    .forEach { name ->
+                        ChoiceRow(
+                            label = name,
+                            selected = selected == name,
+                            onClick = { selected = name }
+                        )
+                    }
+            }
+            Spacer(Modifier.height(14.dp))
+            Text(
+                "Transactions from ${transaction.merchant} will be shown and totalled as the selected merchant, " +
+                    "now and in future imports. Category corrections follow the merge.",
+                style = MaterialTheme.typography.bodySmall,
+                color = Ledger.Muted
+            )
+            Spacer(Modifier.height(18.dp))
+            if (saving) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(24.dp).align(Alignment.CenterHorizontally),
+                    strokeWidth = 2.dp,
+                    color = Ledger.Primary
+                )
+            } else {
+                PrimaryButton(
+                    text = selected?.let { "Merge into $it" } ?: "Choose a merchant",
+                    onClick = {
+                        val target = selected ?: return@PrimaryButton
+                        saving = true
+                        thread {
+                            repository.mergeMerchant(transaction, target)
+                            Handler(Looper.getMainLooper()).post {
+                                saving = false
+                                onSaved()
+                            }
+                        }
+                    },
+                    enabled = selected != null
+                )
+                LedgerTextButton(
+                    text = "Cancel",
+                    onClick = onDismiss,
+                    modifier = Modifier.align(Alignment.CenterHorizontally)
+                )
+            }
         }
     }
 }

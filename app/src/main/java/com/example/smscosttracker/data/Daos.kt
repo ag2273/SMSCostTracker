@@ -40,6 +40,9 @@ interface TransactionDao {
     @Query("UPDATE transactions SET category = :category WHERE merchant = :merchant")
     fun updateCategoryByMerchant(merchant: String, category: String)
 
+    @Query("UPDATE transactions SET merchant = :to WHERE merchant = :from")
+    fun renameMerchant(from: String, to: String)
+
     @Query("UPDATE transactions SET account = :account, channel = :channel WHERE id = :id")
     fun updateInstrument(id: Long, account: String, channel: String)
 
@@ -93,6 +96,18 @@ interface MessageLabelDao {
             "ORDER BY l.updatedAt"
     )
     fun getAllWithMessages(): List<LabelledSms>
+}
+
+@Dao
+interface MerchantAliasDao {
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun upsert(alias: MerchantAliasEntity)
+
+    @Query("SELECT * FROM merchant_aliases ORDER BY updatedAt")
+    fun getAll(): List<MerchantAliasEntity>
+
+    @Query("DELETE FROM merchant_aliases WHERE merchant = :merchant OR aliasKey = :aliasKey")
+    fun deleteFor(merchant: String, aliasKey: String)
 }
 
 @Dao
