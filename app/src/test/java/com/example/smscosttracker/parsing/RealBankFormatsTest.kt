@@ -251,4 +251,32 @@ class RealBankFormatsTest {
         )
         assertEquals("Rose Boutique - Shopify KSA", tabby.merchant)
     }
+
+    @Test
+    fun `digits of a masked account are never read as the amount`() {
+        val purchase = parsed(
+            "HSBC",
+            "From HSBC: 06DEC20 GREEN LEAF CAFE 004-118***-002 EGP 1,266.00- Your available balance is EGP 2,160.00"
+        )
+        assertEquals(126600L, purchase.amountMinor)
+        assertEquals("GREEN LEAF CAFE", purchase.merchant)
+        assertEquals("HSBC 002", purchase.account)
+    }
+
+    @Test
+    fun `incoming, returned and reversed transfers are money back`() {
+        assertSkipped("Mobily Pay", "Incoming local transfer \nFrom: SAMIR NABIL ****4410 \nAmount: 500.00 SAR \nOn: 17-12-2025 09:10")
+        assertSkipped("AlAhliSMS", "حواله كويك باي موني جرام معادة\nمبلغ 1200.85ريال \nحساب210*117\nفي11/27 19:32 ")
+        assertSkipped("SAB", "حوالة عكسية\nبطاقة: ***4821;مدى\nمن: ***220\nمبلغ: 68.00 SAR\nلدى: Hungerstation\nفي: 2025-01-02 10:00:00")
+    }
+
+    @Test
+    fun `merchant names stop at verbs and keep words like bank`() {
+        val tabby = parsed("Tabby", "Thank you! Your order of 647.95 SAR from Noon is confirmed. Your next payment will be charged later.")
+        assertEquals("Noon", tabby.merchant)
+
+        val atm = parsed("D360 Bank", "ATM Withdrawal\nAmount: SAR 400.00\nCard: *5520 - mada\nAt: INMA BANK\nOn: 2026-05-21 15:02")
+        assertEquals("INMA BANK", atm.merchant)
+        assertEquals("D360 Bank 5520", atm.account)
+    }
 }

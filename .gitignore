@@ -9,3 +9,11 @@ local.properties
 *.keystore
 
 __pycache__/
+
+# Personal SMS data must never be committed (backups, exports, local evaluation output).
+Messages_*.json
+*Messages*.json
+*sms*backup*
+*.sms.json
+smsdata/
+sms-export*/

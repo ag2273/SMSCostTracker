@@ -9,6 +9,7 @@ This repository has a single bounded context: turning bank SMS into categorised 
   - ADR-0001: on-device ML for classification (pre-trained model part superseded by ADR-0003)
   - ADR-0002: card/account types are learned from the user (instrument registry)
   - ADR-0003: message reading is learned on the device from user labels (`SmsModel`)
+  - ADR-0004: SMS are read by structure with a shared Arabic/English lexicon, not by template
 - `docs/ux/user-scenario.md` is the approved UX flow; `mockups/` holds the screen mockups it refers to.
 
 ## Code map
