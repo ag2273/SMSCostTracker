@@ -2,10 +2,12 @@ package com.example.smscosttracker.data
 
 import com.example.smscosttracker.classification.Category
 import com.example.smscosttracker.classification.CategoryClassifier
+import com.example.smscosttracker.ml.MessageType
 import com.example.smscosttracker.parsing.ParseOutcome
 import com.example.smscosttracker.parsing.TransactionParser
 
 data class UnparsedSms(
+    val rawSmsId: Long,
     val address: String,
     val body: String,
     val date: Long,
@@ -24,6 +26,7 @@ class TransactionRepository(private val database: AppDatabase) {
 
     fun sourceMessagesFor(transaction: TransactionEntity): List<RawSmsEntity> {
         val instruments = configuredInstrumentMap()
+        val model = SmsModelStore.load(database)
         val candidates = nearbyMessagesFor(transaction).mapNotNull { raw ->
             val parsed = TransactionParser.parse(
                 RawSms(
@@ -32,7 +35,8 @@ class TransactionRepository(private val database: AppDatabase) {
                     date = raw.date,
                     threadId = raw.threadId
                 ),
-                instruments = instruments
+                instruments = instruments,
+                model = model
             ) ?: return@mapNotNull null
             raw to parsed
         }
@@ -75,6 +79,37 @@ class TransactionRepository(private val database: AppDatabase) {
         )
     }
 
+    fun messageLabel(rawSmsId: Long): MessageLabelEntity? =
+        database.messageLabelDao().get(rawSmsId)
+
+    fun ruleType(message: RawSmsEntity): MessageType = TransactionParser.ruleType(message.body)
+
+    /** Saves the user's reading of one SMS and re-parses everything so the model applies it. */
+    fun saveMessageLabel(
+        rawSmsId: Long,
+        type: MessageType,
+        merchant: String? = null,
+        amount: String? = null,
+        instrument: String? = null
+    ): ImportResult {
+        database.messageLabelDao().upsert(
+            MessageLabelEntity(
+                rawSmsId = rawSmsId,
+                type = type.name,
+                merchant = merchant?.trim()?.takeIf { it.isNotEmpty() },
+                amount = amount?.trim()?.takeIf { it.isNotEmpty() },
+                instrument = instrument?.filter { it.isDigit() }?.takeIf { it.isNotEmpty() },
+                updatedAt = System.currentTimeMillis()
+            )
+        )
+        return TransactionImporter(database).rebuildFromStored()
+    }
+
+    fun clearMessageLabel(rawSmsId: Long): ImportResult {
+        database.messageLabelDao().delete(rawSmsId)
+        return TransactionImporter(database).rebuildFromStored()
+    }
+
     fun pendingInstruments(): List<DetectedInstrument> =
         detectedInstruments().filter { !it.verified }
 
@@ -85,6 +120,7 @@ class TransactionRepository(private val database: AppDatabase) {
 
     fun unparsedMessages(): List<UnparsedSms> {
         val instruments = configuredInstrumentMap()
+        val model = SmsModelStore.load(database)
         return database.rawSmsDao().getAll().mapNotNull { raw ->
             val outcome = TransactionParser.analyze(
                 RawSms(
@@ -93,10 +129,12 @@ class TransactionRepository(private val database: AppDatabase) {
                     date = raw.date,
                     threadId = raw.threadId
                 ),
-                instruments = instruments
+                instruments = instruments,
+                model = model
             )
             if (outcome is ParseOutcome.Unparsed) {
                 UnparsedSms(
+                    rawSmsId = raw.id,
                     address = raw.address,
                     body = raw.body,
                     date = raw.date,

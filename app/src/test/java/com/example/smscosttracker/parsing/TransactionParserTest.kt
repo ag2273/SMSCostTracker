@@ -3,6 +3,9 @@ package com.example.smscosttracker.parsing
 import com.example.smscosttracker.data.InstrumentCandidate
 import com.example.smscosttracker.data.RawSms
 import com.example.smscosttracker.data.TransactionChannel
+import com.example.smscosttracker.ml.MessageLabel
+import com.example.smscosttracker.ml.MessageType
+import com.example.smscosttracker.ml.SmsModel
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -385,5 +388,85 @@ class TransactionParserTest {
         )!!
 
         assertEquals("Amazon Now", parsed.merchant)
+    }
+
+    @Test
+    fun `parses amounts written in arabic digits`() {
+        val parsed = TransactionParser.parse(message("خصم ١٬٢٥٠٫٥٠ ريال لدى بنده"))!!
+
+        assertEquals(125050L, parsed.amountMinor)
+        assertEquals("SAR", parsed.currency)
+    }
+
+    @Test
+    fun `rule types split skipped and spending messages`() {
+        assertEquals(MessageType.NOTICE, TransactionParser.ruleType("Your OTP is 4412"))
+        assertEquals(MessageType.DECLINED, TransactionParser.ruleType("Purchase of SAR 5.00 declined"))
+        assertEquals(
+            MessageType.INTERNAL,
+            TransactionParser.ruleType("SAR 500.00 moved between your accounts")
+        )
+        assertEquals(MessageType.CREDIT, TransactionParser.ruleType("Salary SAR 9,000.00 credited"))
+        assertEquals(
+            MessageType.STATEMENT,
+            TransactionParser.ruleType("Statement issued. Minimum due SAR 300.00")
+        )
+        assertEquals(MessageType.WITHDRAWAL, TransactionParser.ruleType("ATM withdrawal SAR 400.00"))
+        assertEquals(
+            MessageType.BILL_OR_TRANSFER,
+            TransactionParser.ruleType("Bill payment SAR 230.00 to STC via SADAD")
+        )
+        assertEquals(MessageType.PURCHASE, TransactionParser.ruleType("Purchase of SAR 9.00 at Panda"))
+    }
+
+    @Test
+    fun `learned template supplies merchant amount and instrument`() {
+        val labelled = "POS\nAmt: 1,249.00\nBy: *4432\nAt: JARIR BOOKSTORE RIYADH\n12/10/26"
+        val model = SmsModel.train(
+            messages = emptyList(),
+            labels = listOf(
+                MessageLabel(
+                    address = "BANK",
+                    body = labelled,
+                    type = MessageType.PURCHASE,
+                    merchant = "JARIR BOOKSTORE RIYADH",
+                    amount = "1,249.00",
+                    instrument = "4432"
+                )
+            ),
+            ruleType = TransactionParser::ruleType
+        )
+
+        val parsed = TransactionParser.parse(
+            message("POS\nAmt: 86.00\nBy: *9981\nAt: AL BAIK OLAYA\n13/10/26"),
+            defaultCurrency = "SAR",
+            instruments = mapOf(TransactionParser.instrumentKey("BANK", "9981") to TransactionChannel.CARD),
+            model = model
+        )!!
+
+        assertEquals("AL BAIK OLAYA", parsed.merchant)
+        assertEquals(8600L, parsed.amountMinor)
+        assertEquals("SAR", parsed.currency)
+        assertEquals("BANK 9981", parsed.account)
+        assertEquals(TransactionChannel.CARD, parsed.channel)
+    }
+
+    @Test
+    fun `learned non-spending label skips a message the rules would parse`() {
+        val body = "Purchase of SAR 1.00 at TEST verification merchant"
+        val model = SmsModel.train(
+            messages = emptyList(),
+            labels = listOf(MessageLabel("BANK", body, MessageType.NOTICE)),
+            ruleType = TransactionParser::ruleType
+        )
+
+        assertEquals(
+            ParseOutcome.Skipped("OTP or notice (learned)"),
+            TransactionParser.analyze(message(body), model = model)
+        )
+        assertEquals(
+            ParseOutcome.Skipped("No amount or spending hint"),
+            TransactionParser.analyze(message("Welcome to SAB"), model = model)
+        )
     }
 }

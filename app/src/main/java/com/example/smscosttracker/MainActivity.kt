@@ -230,7 +230,8 @@ private fun MainShell(
                     SettingsRoute.UNPARSED -> UnparsedMessagesScreen(
                         repository = repository,
                         refreshKey = refreshKey,
-                        onBack = { settingsRoute = SettingsRoute.OVERVIEW }
+                        onBack = { settingsRoute = SettingsRoute.OVERVIEW },
+                        onChanged = onDataChanged
                     )
                     SettingsRoute.REIMPORT -> ReimportScreen(
                         importer = importer,

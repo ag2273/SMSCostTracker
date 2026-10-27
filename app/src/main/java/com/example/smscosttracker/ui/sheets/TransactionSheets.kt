@@ -49,9 +49,11 @@ import com.example.smscosttracker.analysis.TransactionFilterState
 import com.example.smscosttracker.analysis.TransactionFilters
 import com.example.smscosttracker.classification.Category
 import com.example.smscosttracker.data.InstrumentCandidate
+import com.example.smscosttracker.data.MessageLabelEntity
 import com.example.smscosttracker.data.RawSmsEntity
 import com.example.smscosttracker.data.TransactionEntity
 import com.example.smscosttracker.data.TransactionRepository
+import com.example.smscosttracker.ml.MessageType
 import com.example.smscosttracker.ui.components.Avatar
 import com.example.smscosttracker.ui.components.ChannelIcon
 import com.example.smscosttracker.ui.components.ChoiceRow
@@ -69,6 +71,7 @@ import com.example.smscosttracker.ui.components.SheetHeader
 import com.example.smscosttracker.ui.components.channelLabel
 import com.example.smscosttracker.ui.components.formatMoney
 import com.example.smscosttracker.ui.theme.Ledger
+import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -386,6 +389,8 @@ fun TransactionDetailSheet(
     var candidates by remember { mutableStateOf<List<InstrumentCandidate>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
     var showInstruments by remember { mutableStateOf(false) }
+    var label by remember { mutableStateOf<MessageLabelEntity?>(null) }
+    var labelling by remember { mutableStateOf<RawSmsEntity?>(null) }
     val formatter = remember {
         DateTimeFormatter.ofPattern("d MMM yyyy · HH:mm", Locale.ENGLISH)
             .withZone(ZoneId.systemDefault())
@@ -395,12 +400,34 @@ fun TransactionDetailSheet(
         thread {
             val loadedMessages = repository.sourceMessagesFor(transaction)
             val loadedCandidates = repository.candidateInstruments(transaction)
+            val loadedLabel = loadedMessages.firstOrNull()?.let { repository.messageLabel(it.id) }
             Handler(Looper.getMainLooper()).post {
                 messages = loadedMessages
                 candidates = loadedCandidates
+                label = loadedLabel
                 loading = false
             }
         }
+    }
+
+    labelling?.let { message ->
+        MessageLabelSheet(
+            rawSmsId = message.id,
+            address = message.address,
+            body = message.body,
+            repository = repository,
+            initialType = repository.ruleType(message),
+            initialMerchant = transaction.merchant.takeIf { it != "Unknown" }.orEmpty(),
+            initialAmount = BigDecimal.valueOf(transaction.amountMinor, 2).toPlainString(),
+            initialInstrument = transaction.account.substringAfterLast(' ')
+                .takeIf { digits -> digits.isNotEmpty() && digits.all { it.isDigit() } }
+                .orEmpty(),
+            onDismiss = { labelling = null },
+            onSaved = {
+                labelling = null
+                onChanged()
+            }
+        )
     }
 
     ModalBottomSheet(
@@ -550,6 +577,9 @@ fun TransactionDetailSheet(
                             "Instrument ${transaction.account} was read from the SMS."
                         }
                     )
+                    if (label != null) {
+                        WhyRow("Read with your correction of this sender's message format.")
+                    }
                     WhyRow("Balance lines and duplicates are skipped.")
                 }
             }
@@ -585,7 +615,189 @@ fun TransactionDetailSheet(
                 onClick = { showInstruments = !showInstruments },
                 modifier = Modifier.padding(top = 8.dp)
             )
+            if (messages.isNotEmpty()) {
+                SecondaryButton(
+                    text = "Fix how this SMS is read",
+                    onClick = { labelling = messages.first() },
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+            }
             Spacer(Modifier.height(10.dp))
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun MessageLabelSheet(
+    rawSmsId: Long,
+    address: String,
+    body: String,
+    repository: TransactionRepository,
+    initialType: MessageType,
+    initialMerchant: String = "",
+    initialAmount: String = "",
+    initialInstrument: String = "",
+    onDismiss: () -> Unit,
+    onSaved: () -> Unit
+) {
+    var type by remember(rawSmsId) { mutableStateOf(initialType) }
+    var merchant by remember(rawSmsId) { mutableStateOf(initialMerchant) }
+    var amount by remember(rawSmsId) { mutableStateOf(initialAmount) }
+    var instrument by remember(rawSmsId) { mutableStateOf(initialInstrument) }
+    var existing by remember(rawSmsId) { mutableStateOf<MessageLabelEntity?>(null) }
+    var saving by remember { mutableStateOf(false) }
+
+    LaunchedEffect(rawSmsId) {
+        thread {
+            val stored = repository.messageLabel(rawSmsId)
+            Handler(Looper.getMainLooper()).post {
+                existing = stored
+                stored?.let {
+                    type = MessageType.fromStorage(it.type)
+                    merchant = it.merchant.orEmpty()
+                    amount = it.amount.orEmpty()
+                    instrument = it.instrument.orEmpty()
+                }
+            }
+        }
+    }
+
+    fun persist(action: () -> Unit) {
+        saving = true
+        thread {
+            action()
+            Handler(Looper.getMainLooper()).post {
+                saving = false
+                onSaved()
+            }
+        }
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = Ledger.Background,
+        tonalElevation = 0.dp,
+        dragHandle = null,
+        shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 28.dp)
+        ) {
+            SheetHeader(
+                title = "Fix how this SMS is read",
+                subtitle = address,
+                onClose = onDismiss
+            )
+            Spacer(Modifier.height(14.dp))
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = Ledger.SurfaceAlt,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    body,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Ledger.Ink,
+                    modifier = Modifier.padding(11.dp)
+                )
+            }
+            Spacer(Modifier.height(14.dp))
+            Text("This message is", style = MaterialTheme.typography.titleMedium, color = Ledger.Ink)
+            Spacer(Modifier.height(8.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                MessageType.entries.forEach { option ->
+                    ChoiceRow(
+                        label = option.label,
+                        selected = type == option,
+                        onClick = { type = option }
+                    )
+                }
+            }
+            if (type.isSpending) {
+                Spacer(Modifier.height(14.dp))
+                Text("MERCHANT", style = MaterialTheme.typography.labelSmall, color = Ledger.Muted)
+                LedgerTextField(
+                    value = merchant,
+                    onValueChange = { merchant = it },
+                    placeholder = "Copy the shop name as written in the SMS"
+                )
+                Spacer(Modifier.height(10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("AMOUNT", style = MaterialTheme.typography.labelSmall, color = Ledger.Muted)
+                        LedgerTextField(
+                            value = amount,
+                            onValueChange = { amount = it },
+                            placeholder = "1,249.00"
+                        )
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("CARD/ACCOUNT", style = MaterialTheme.typography.labelSmall, color = Ledger.Muted)
+                        LedgerTextField(
+                            value = instrument,
+                            onValueChange = { value -> instrument = value.filter { it.isDigit() } },
+                            placeholder = "Last digits"
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.height(14.dp))
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = Ledger.AccentSoft,
+                border = BorderStroke(1.dp, Ledger.Accent.copy(alpha = 0.25f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(13.dp)) {
+                    Text("This teaches the reader", style = MaterialTheme.typography.titleSmall, color = Ledger.Ink)
+                    Text(
+                        "Every SMS from $address with the same wording will be read the same way, " +
+                            "now and in future imports. It stays on this device.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Ledger.Muted
+                    )
+                }
+            }
+            Spacer(Modifier.height(18.dp))
+            if (saving) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(24.dp).align(Alignment.CenterHorizontally),
+                    strokeWidth = 2.dp,
+                    color = Ledger.Primary
+                )
+            } else {
+                PrimaryButton(
+                    "Save and re-read messages",
+                    {
+                        persist {
+                            repository.saveMessageLabel(
+                                rawSmsId = rawSmsId,
+                                type = type,
+                                merchant = merchant.takeIf { type.isSpending },
+                                amount = amount.takeIf { type.isSpending },
+                                instrument = instrument.takeIf { type.isSpending }
+                            )
+                        }
+                    }
+                )
+                if (existing != null) {
+                    LedgerTextButton(
+                        text = "Remove my correction",
+                        onClick = { persist { repository.clearMessageLabel(rawSmsId) } },
+                        modifier = Modifier.align(Alignment.CenterHorizontally)
+                    )
+                }
+                LedgerTextButton(
+                    text = "Cancel",
+                    onClick = onDismiss,
+                    modifier = Modifier.align(Alignment.CenterHorizontally)
+                )
+            }
         }
     }
 }
