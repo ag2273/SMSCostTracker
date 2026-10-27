@@ -56,3 +56,12 @@ Offline aggregation and filtering of Transactions into lists and charts.
 
 ## Date range
 A filter over Transaction occurrence time: all time, a month, a quarter, or a custom start and end.
+
+## Recurring series
+Payments to one Merchant in one currency that repeat on a Cycle, found by Analysis from stored Transactions. It has a typical Amount (Fixed within ±5%, or Variable such as utilities), a last and next expected date, and a status: Active, Late (one expected payment missed) or Ended (two or more missed). A series is split by Account only when two series run at one Merchant on different cards.
+
+## Cycle
+How often a Recurring series repeats: weekly, monthly (±3 days), quarterly or yearly. Monthly and longer cycles follow the calendar date of the last payment.
+
+## Recurring override
+The user's answer about a Recurring series: confirmed (optionally renamed) or dismissed. It is kept by series key (Merchant key, currency and, when split, Account) so a dismissed series is not suggested again after a re-parse.

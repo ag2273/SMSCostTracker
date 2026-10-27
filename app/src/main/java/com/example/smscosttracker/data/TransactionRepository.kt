@@ -1,5 +1,8 @@
 package com.example.smscosttracker.data
 
+import com.example.smscosttracker.analysis.RecurringOverrideState
+import com.example.smscosttracker.analysis.RecurringPayments
+import com.example.smscosttracker.analysis.RecurringSeries
 import com.example.smscosttracker.classification.Category
 import com.example.smscosttracker.classification.CategoryClassifier
 import com.example.smscosttracker.classification.MerchantNames
@@ -155,6 +158,35 @@ class TransactionRepository(private val database: AppDatabase) {
     fun undoMerchantMerges(transaction: TransactionEntity): ImportResult {
         database.merchantAliasDao().deleteFor(transaction.merchant, MerchantNames.key(transaction.merchant))
         return TransactionImporter(database).rebuildFromStored()
+    }
+
+    fun recurringSeries(): List<RecurringSeries> =
+        RecurringPayments.detect(transactions(), database.recurringOverrideDao().getAll())
+
+    fun confirmRecurring(series: RecurringSeries) {
+        val name = database.recurringOverrideDao().get(series.key)?.name
+        saveRecurringOverride(series, RecurringOverrideState.CONFIRMED, name)
+    }
+
+    /** Renaming a series also confirms it. */
+    fun renameRecurring(series: RecurringSeries, name: String) {
+        saveRecurringOverride(series, RecurringOverrideState.CONFIRMED, name.trim().takeIf { it.isNotEmpty() })
+    }
+
+    /** A dismissed series is not suggested again, including after a re-parse. */
+    fun dismissRecurring(series: RecurringSeries) {
+        saveRecurringOverride(series, RecurringOverrideState.DISMISSED, null)
+    }
+
+    private fun saveRecurringOverride(series: RecurringSeries, state: RecurringOverrideState, name: String?) {
+        database.recurringOverrideDao().upsert(
+            RecurringOverrideEntity(
+                seriesKey = series.key,
+                state = state.name,
+                name = name,
+                updatedAt = System.currentTimeMillis()
+            )
+        )
     }
 
     fun pendingInstruments(): List<DetectedInstrument> =

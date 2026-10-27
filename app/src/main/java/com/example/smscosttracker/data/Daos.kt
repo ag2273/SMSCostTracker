@@ -114,6 +114,18 @@ interface MerchantAliasDao {
 }
 
 @Dao
+interface RecurringOverrideDao {
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun upsert(entry: RecurringOverrideEntity)
+
+    @Query("SELECT * FROM recurring_overrides")
+    fun getAll(): List<RecurringOverrideEntity>
+
+    @Query("SELECT * FROM recurring_overrides WHERE seriesKey = :seriesKey")
+    fun get(seriesKey: String): RecurringOverrideEntity?
+}
+
+@Dao
 interface InstrumentDao {
     @Insert(onConflict = androidx.room.OnConflictStrategy.REPLACE)
     fun upsertAll(instruments: List<InstrumentEntity>)

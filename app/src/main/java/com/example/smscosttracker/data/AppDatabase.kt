@@ -14,9 +14,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         CategoryCorrectionEntity::class,
         InstrumentEntity::class,
         MessageLabelEntity::class,
-        MerchantAliasEntity::class
+        MerchantAliasEntity::class,
+        RecurringOverrideEntity::class
     ],
-    version = 10,
+    version = 11,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -26,6 +27,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun instrumentDao(): InstrumentDao
     abstract fun messageLabelDao(): MessageLabelDao
     abstract fun merchantAliasDao(): MerchantAliasDao
+    abstract fun recurringOverrideDao(): RecurringOverrideDao
 
     companion object {
         @Volatile
@@ -119,6 +121,16 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `recurring_overrides` " +
+                        "(`seriesKey` TEXT NOT NULL, `state` TEXT NOT NULL, `name` TEXT, " +
+                        "`updatedAt` INTEGER NOT NULL, PRIMARY KEY(`seriesKey`))"
+                )
+            }
+        }
+
         fun get(context: Context): AppDatabase =
             instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
@@ -134,7 +146,8 @@ abstract class AppDatabase : RoomDatabase() {
                     MIGRATION_6_7,
                     MIGRATION_7_8,
                     MIGRATION_8_9,
-                    MIGRATION_9_10
+                    MIGRATION_9_10,
+                    MIGRATION_10_11
                 ).build().also { instance = it }
             }
     }

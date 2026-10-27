@@ -62,3 +62,12 @@ data class InstrumentEntity(
     val label: String = "",
     val ignored: Boolean = false
 )
+
+/** The user's answer about a detected recurring series, kept by series key so re-parses keep it. */
+@Entity(tableName = "recurring_overrides")
+data class RecurringOverrideEntity(
+    @PrimaryKey val seriesKey: String,
+    val state: String,
+    val name: String? = null,
+    val updatedAt: Long
+)
