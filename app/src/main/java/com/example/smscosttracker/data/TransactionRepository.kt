@@ -3,6 +3,7 @@ package com.example.smscosttracker.data
 import com.example.smscosttracker.classification.Category
 import com.example.smscosttracker.classification.CategoryClassifier
 import com.example.smscosttracker.ml.MessageType
+import com.example.smscosttracker.ml.SmsModel
 import com.example.smscosttracker.parsing.ParseOutcome
 import com.example.smscosttracker.parsing.TransactionParser
 
@@ -15,6 +16,19 @@ data class UnparsedSms(
 )
 
 class TransactionRepository(private val database: AppDatabase) {
+    // Stored SMS are only ever added, so their count tells when a re-scan is needed.
+    private data class UnparsedVersion(
+        val messages: Int,
+        val instruments: Map<String, TransactionChannel>,
+        val model: SmsModel
+    )
+
+    @Volatile
+    private var unparsedCache: Pair<UnparsedVersion, List<UnparsedSms>>? = null
+
+    @Volatile
+    private var candidateCache: Pair<Int, Map<Pair<String, String>, Map<TransactionChannel, Int>>>? = null
+
     fun transactions(): List<TransactionEntity> = database.transactionDao().getAll()
 
     fun count(): Int = database.transactionDao().count()
@@ -121,6 +135,8 @@ class TransactionRepository(private val database: AppDatabase) {
     fun unparsedMessages(): List<UnparsedSms> {
         val instruments = configuredInstrumentMap()
         val model = SmsModelStore.load(database)
+        val version = UnparsedVersion(database.rawSmsDao().count(), instruments, model)
+        unparsedCache?.takeIf { it.first == version }?.let { return it.second }
         return database.rawSmsDao().getAll().mapNotNull { raw ->
             val outcome = TransactionParser.analyze(
                 RawSms(
@@ -143,7 +159,7 @@ class TransactionRepository(private val database: AppDatabase) {
             } else {
                 null
             }
-        }.sortedByDescending { it.date }
+        }.sortedByDescending { it.date }.also { unparsedCache = version to it }
     }
 
     fun detectedInstruments(): List<DetectedInstrument> =
@@ -153,15 +169,7 @@ class TransactionRepository(private val database: AppDatabase) {
         val configured = database.instrumentDao().getAll().associateBy {
             TransactionParser.instrumentKey(it.address, it.digits)
         }
-        val counts = LinkedHashMap<Pair<String, String>, MutableMap<TransactionChannel, Int>>()
-        database.rawSmsDao().getAll().forEach { message ->
-            TransactionParser.candidates(message.body).forEach { candidate ->
-                val key = message.address to candidate.digits
-                counts.getOrPut(key) { mutableMapOf() }
-                    .merge(candidate.channel, 1, Int::plus)
-            }
-        }
-        return counts.mapNotNull { (key, channels) ->
+        return candidateCounts().mapNotNull { (key, channels) ->
             val stored = configured[TransactionParser.instrumentKey(key.first, key.second)]
             DetectedInstrument(
                 address = key.first,
@@ -230,6 +238,21 @@ class TransactionRepository(private val database: AppDatabase) {
             account = "${transaction.sourceAddress} ${candidate.digits}",
             channel = candidate.channel.name
         )
+    }
+
+    private fun candidateCounts(): Map<Pair<String, String>, Map<TransactionChannel, Int>> {
+        val messages = database.rawSmsDao().count()
+        candidateCache?.takeIf { it.first == messages }?.let { return it.second }
+        val counts = LinkedHashMap<Pair<String, String>, MutableMap<TransactionChannel, Int>>()
+        database.rawSmsDao().getAll().forEach { message ->
+            TransactionParser.candidates(message.body).forEach { candidate ->
+                val key = message.address to candidate.digits
+                counts.getOrPut(key) { mutableMapOf() }
+                    .merge(candidate.channel, 1, Int::plus)
+            }
+        }
+        candidateCache = messages to counts
+        return counts
     }
 
     private fun configuredInstrumentMap(): Map<String, TransactionChannel> =

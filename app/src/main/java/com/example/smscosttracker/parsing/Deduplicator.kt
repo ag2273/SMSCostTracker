@@ -14,11 +14,20 @@ object Deduplicator {
         candidates: List<ParsedTransaction>,
         existing: List<TransactionEntity>
     ): List<ParsedTransaction> {
+        // Duplicates share the amount, so only keys with the same amount need comparing.
+        val seen = HashMap<Long, MutableList<TransactionKey>>()
+        for (transaction in existing) {
+            val key = transaction.key()
+            if (key.hasKnownMerchant) seen.getOrPut(key.amountMinor) { mutableListOf() } += key
+        }
         val accepted = mutableListOf<ParsedTransaction>()
         for (candidate in candidates) {
-            val duplicateOfExisting = existing.any { isDuplicate(candidate, it) }
-            val duplicateOfBatch = accepted.any { candidate.key().matches(it.key()) }
-            if (!duplicateOfExisting && !duplicateOfBatch) accepted += candidate
+            val key = candidate.key()
+            val sameAmount = seen.getOrPut(key.amountMinor) { mutableListOf() }
+            if (sameAmount.none { key.matches(it) }) {
+                accepted += candidate
+                if (key.hasKnownMerchant) sameAmount += key
+            }
         }
         return accepted
     }

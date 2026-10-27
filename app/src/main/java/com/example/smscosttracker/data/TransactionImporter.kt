@@ -39,8 +39,7 @@ class TransactionImporter(
         onProgress: (ImportProgress) -> Unit = {}
     ): ImportResult =
         database.runInTransaction(Callable {
-            val rawBefore = database.rawSmsDao().count()
-            database.rawSmsDao().insertAll(
+            val insertedIds = database.rawSmsDao().insertAll(
                 messages.map {
                     RawSmsEntity(
                         address = it.address,
@@ -50,11 +49,11 @@ class TransactionImporter(
                     )
                 }
             )
-            val rawInserted = database.rawSmsDao().count() - rawBefore
+            val fresh = newlyInserted(messages, insertedIds)
 
-            val parsed = parseAll(messages, onProgress)
+            val parsed = parseAll(fresh, onProgress)
             ImportResult(
-                rawInserted = rawInserted,
+                rawInserted = fresh.size,
                 parsed = parsed.transactions.size,
                 stored = store(parsed.transactions),
                 skipped = parsed.skipped,
@@ -125,6 +124,12 @@ class TransactionImporter(
             }
         }
         return ParsedBatch(transactions, skipped, unparsed)
+    }
+
+    companion object {
+        /** Messages whose insert was not ignored as already stored; Room returns -1 for those. */
+        fun newlyInserted(messages: List<RawSms>, insertedIds: List<Long>): List<RawSms> =
+            messages.filterIndexed { index, _ -> insertedIds.getOrNull(index)?.let { it != -1L } ?: true }
     }
 
     private fun store(parsed: List<ParsedTransaction>): Int {
