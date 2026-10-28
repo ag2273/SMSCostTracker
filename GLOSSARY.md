@@ -73,10 +73,10 @@ The UI name for a Recurring series. The Subscriptions screen totals current seri
 A local notification about a confirmed Subscription: Late (no payment 3 days after the expected date), Price changed (a fixed-amount series charged more than 5% above or below its earlier price) or Due tomorrow. Each event alerts once. Alerts are off until the user turns them on in Settings, and are checked after each Sync and once a day.
 
 ## Exchange rate
-Units of a currency per US dollar, for USD, SAR, EGP, EUR and GBP. Rates are downloaded from a public source or set by the user in Settings, and convert amounts through USD.
+Units of a currency per US dollar, for USD, SAR, EGP, EUR and GBP. Rates ship with the app and the user can change them in Settings; they convert amounts through USD. The app never downloads rates.
 
 ## Rate version
-One exchange rate with the time it took effect. Every download that changes a rate, and every rate the user sets, is a new version; an amount is converted with the version in effect when its Transaction happened, so a change never rewrites earlier Transactions. Rates set by the user are kept by daily downloads.
+One exchange rate with the time it took effect. Built-in rates apply from the beginning; every rate the user saves is a new version from that moment. An amount is converted with the version in effect when its Transaction happened, so a change never rewrites earlier Transactions.
 
 ## Account currency
 The currency a card's or account's amounts are shown in. The user chooses it in Cards & accounts; otherwise it is the currency most of its Transactions use (or, for one with few Transactions, the one its bank mostly uses). A Transaction in another currency is shown converted with the Rate version in effect when it happened, and its stated amount stays visible.

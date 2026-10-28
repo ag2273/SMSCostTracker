@@ -310,7 +310,7 @@ fun SettingsScreen(
             LedgerCard {
                 SelectRow(
                     label = "Exchange rates",
-                    value = "USD, SAR, EGP, EUR and GBP · downloaded or set by you",
+                    value = "USD, SAR, EGP, EUR and GBP · built in, change them any time",
                     icon = Icons.Outlined.CurrencyExchange,
                     onClick = onOpenRates
                 )
@@ -367,8 +367,7 @@ fun SettingsScreen(
                             color = Ledger.Ink
                         )
                         Text(
-                            "SMS is read and parsed locally and never uploaded. The internet is used only to " +
-                                "download public exchange rates; nothing about you is sent.",
+                            "SMS is read and parsed locally. The app has no internet permission and never uploads messages.",
                             style = MaterialTheme.typography.bodySmall,
                             color = Ledger.Muted
                         )

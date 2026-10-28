@@ -13,8 +13,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -32,8 +30,6 @@ import com.example.smscosttracker.analysis.RateSource
 import com.example.smscosttracker.analysis.RateVersion
 import com.example.smscosttracker.data.AppDatabase
 import com.example.smscosttracker.data.ExchangeRateRepository
-import com.example.smscosttracker.data.OnboardingPreferences
-import com.example.smscosttracker.rates.ExchangeRateSync
 import com.example.smscosttracker.ui.components.LedgerCard
 import com.example.smscosttracker.ui.components.LedgerDivider
 import com.example.smscosttracker.ui.components.LedgerTextButton
@@ -41,9 +37,7 @@ import com.example.smscosttracker.ui.components.LedgerTextField
 import com.example.smscosttracker.ui.components.PageHeader
 import com.example.smscosttracker.ui.components.Pill
 import com.example.smscosttracker.ui.components.PillTone
-import com.example.smscosttracker.ui.components.PrimaryButton
 import com.example.smscosttracker.ui.components.ScreenBackground
-import com.example.smscosttracker.ui.components.SelectRow
 import com.example.smscosttracker.ui.theme.Ledger
 import java.time.Instant
 import java.time.ZoneId
@@ -54,19 +48,14 @@ import kotlin.concurrent.thread
 private val UPDATED = DateTimeFormatter.ofPattern("d MMM yyyy · HH:mm", Locale.ENGLISH).withZone(ZoneId.systemDefault())
 
 @Composable
-fun ExchangeRatesScreen(
-    preferences: OnboardingPreferences,
-    onBack: () -> Unit
-) {
+fun ExchangeRatesScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val repository = remember(context) { ExchangeRateRepository(AppDatabase.get(context)) }
     var rates by remember { mutableStateOf<Map<String, RateVersion>>(emptyMap()) }
     var reloadKey by remember { mutableStateOf(0) }
     var editing by remember { mutableStateOf<String?>(null) }
     var draft by remember { mutableStateOf("") }
-    var updating by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf<String?>(null) }
-    var autoUpdate by remember { mutableStateOf(preferences.autoUpdateRates) }
 
     LaunchedEffect(reloadKey) {
         thread {
@@ -126,33 +115,11 @@ fun ExchangeRatesScreen(
                 }
             }
             Text(
-                "Tap a rate to set it yourself. A new rate applies to transactions from the moment it " +
-                    "changes; earlier transactions keep the rate they had.",
+                "Rates come with the app. Tap one to change it; a new rate applies to transactions " +
+                    "from the moment you save it, and earlier transactions keep the rate they had.",
                 style = MaterialTheme.typography.labelSmall,
                 color = Ledger.Muted,
                 modifier = Modifier.padding(top = 6.dp, start = 4.dp, end = 4.dp)
-            )
-            Spacer(Modifier.height(16.dp))
-            PrimaryButton(
-                text = if (updating) "Updating…" else "Update from internet",
-                enabled = !updating,
-                onClick = {
-                    updating = true
-                    status = null
-                    thread {
-                        val result = runCatching { ExchangeRateSync.refresh(context, replaceManual = true) }
-                            .getOrDefault(ExchangeRateSync.Result.Unavailable)
-                        Handler(Looper.getMainLooper()).post {
-                            updating = false
-                            status = when (result) {
-                                is ExchangeRateSync.Result.Updated ->
-                                    if (result.changed == 0) "Rates are up to date." else "${result.changed} rate(s) updated."
-                                ExchangeRateSync.Result.Unavailable -> "Couldn't download rates. Check the connection and try again."
-                            }
-                            reloadKey++
-                        }
-                    }
-                }
             )
             status?.let {
                 Text(
@@ -162,25 +129,11 @@ fun ExchangeRatesScreen(
                     modifier = Modifier.padding(top = 8.dp, start = 4.dp)
                 )
             }
-            Spacer(Modifier.height(16.dp))
-            LedgerCard {
-                SelectRow(
-                    label = "Update daily",
-                    value = "Downloads rates once a day. Rates you set yourself are kept.",
-                    icon = Icons.Outlined.Sync,
-                    trailing = if (autoUpdate) "On" else "Off",
-                    onClick = {
-                        autoUpdate = !autoUpdate
-                        preferences.autoUpdateRates = autoUpdate
-                        ExchangeRateSync.schedule(context)
-                    }
-                )
-            }
             Text(
-                "Only the public rate list is downloaded. Nothing about you, your SMS or your spending is sent.",
+                "The app never connects to the internet; rates are not downloaded.",
                 style = MaterialTheme.typography.labelSmall,
                 color = Ledger.Muted,
-                modifier = Modifier.padding(top = 6.dp, start = 4.dp, end = 4.dp)
+                modifier = Modifier.padding(top = 12.dp, start = 4.dp, end = 4.dp)
             )
             Spacer(Modifier.height(24.dp))
         }

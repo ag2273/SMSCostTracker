@@ -22,7 +22,7 @@ class ExchangeRatesTest {
     fun `each amount uses the version in effect at its time`() {
         val changedAt = 1_000_000L
         val converter = CurrencyConverter(
-            ExchangeRates.BUILT_IN + RateVersion("EGP", 50.00, changedAt, RateSource.ONLINE)
+            ExchangeRates.BUILT_IN + RateVersion("EGP", 50.00, changedAt, RateSource.MANUAL)
         )
 
         assertEquals(485_000L, converter.convert(10_000, "USD", "EGP", at = changedAt - 1))
@@ -41,7 +41,7 @@ class ExchangeRatesTest {
 
     @Test
     fun `times before the first version use the earliest one`() {
-        val converter = CurrencyConverter(listOf(RateVersion("SAR", 3.75, 5_000, RateSource.ONLINE)))
+        val converter = CurrencyConverter(listOf(RateVersion("SAR", 3.75, 5_000, RateSource.MANUAL)))
         assertEquals(375L, converter.convert(100, "USD", "SAR", at = 0))
     }
 
@@ -61,40 +61,9 @@ class ExchangeRatesTest {
     }
 
     @Test
-    fun `reads both download formats and skips bad values`() {
-        val nested = """{"date":"2026-10-28","usd":{"aed":3.6725,"egp":48.71,"eur":0.9213,"gbp":0.7702,"sar":3.75,"usd":1}}"""
-        assertEquals(
-            mapOf("SAR" to 3.75, "EGP" to 48.71, "EUR" to 0.9213, "GBP" to 0.7702),
-            ExchangeRates.parseUsdRates(nested)
-        )
-
-        val flat = """{"result":"success","base_code":"USD","rates":{"USD":1,"EGP":48.6,"SAR":3.75,"EUR":9.2e-1,"GBP":0}}"""
-        assertEquals(mapOf("SAR" to 3.75, "EGP" to 48.6, "EUR" to 0.92), ExchangeRates.parseUsdRates(flat))
-
-        assertTrue(ExchangeRates.parseUsdRates("<html>error</html>").isEmpty())
-    }
-
-    @Test
     fun `tiny changes are not new versions`() {
         assertTrue(ExchangeRates.changed(null, 3.75))
         assertFalse(ExchangeRates.changed(3.75, 3.75001))
         assertTrue(ExchangeRates.changed(48.5, 48.71))
-    }
-
-    @Test
-    fun `a download keeps rates set by hand unless everything is updated`() {
-        val current = CurrencyConverter(
-            ExchangeRates.BUILT_IN + RateVersion("EGP", 50.0, 10, RateSource.MANUAL)
-        ).current()
-        val downloaded = mapOf("SAR" to 3.75, "EGP" to 48.71, "EUR" to 0.93)
-
-        assertEquals(
-            listOf(RateVersion("EUR", 0.93, 99, RateSource.ONLINE)),
-            ExchangeRates.updatesFrom(current, downloaded, now = 99, replaceManual = false)
-        )
-        assertEquals(
-            listOf("EGP", "EUR"),
-            ExchangeRates.updatesFrom(current, downloaded, now = 99, replaceManual = true).map { it.currency }
-        )
     }
 }

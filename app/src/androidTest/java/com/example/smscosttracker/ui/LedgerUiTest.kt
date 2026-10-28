@@ -22,7 +22,6 @@ import com.example.smscosttracker.data.AppDatabase
 import com.example.smscosttracker.data.InstrumentEntity
 import com.example.smscosttracker.data.TransactionChannel
 import com.example.smscosttracker.data.ExchangeRateRepository
-import com.example.smscosttracker.data.OnboardingPreferences
 import com.example.smscosttracker.data.RawSmsEntity
 import com.example.smscosttracker.data.TransactionEntity
 import com.example.smscosttracker.data.TransactionImporter
@@ -345,16 +344,13 @@ class LedgerUiTest {
     fun exchangeRatesScreenListsTheRates() {
         compose.setContent {
             SmsCostTrackerTheme {
-                ExchangeRatesScreen(
-                    preferences = OnboardingPreferences(ApplicationProvider.getApplicationContext()),
-                    onBack = {}
-                )
+                ExchangeRatesScreen(onBack = {})
             }
         }
 
         waitForText("3.7500")
         compose.onNodeWithText("EGP").assertExists()
-        compose.onNodeWithText("Update from internet").performScrollTo().assertExists()
+        assertTrue(compose.onAllNodes(hasText("Built-in starting rate")).fetchSemanticsNodes().isNotEmpty())
     }
 
     @Test

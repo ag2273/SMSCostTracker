@@ -92,7 +92,7 @@ class AccountCurrenciesTest {
     @Test
     fun `display currency converts everything with each transaction's own rate`() {
         val changedAt = 1_000L
-        val converter = CurrencyConverter(ExchangeRates.BUILT_IN + RateVersion("EGP", 50.0, changedAt, RateSource.ONLINE))
+        val converter = CurrencyConverter(ExchangeRates.BUILT_IN + RateVersion("EGP", 50.0, changedAt, RateSource.MANUAL))
         val rows = listOf(
             transaction("SAB 1214", 10_000, "USD", at = 0),
             transaction("CIB 7781", 10_000, "USD", at = changedAt)
