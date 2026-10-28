@@ -400,7 +400,8 @@ private fun CurrencySegmented(
     selected: String,
     onSelect: (String) -> Unit
 ) {
-    if (currencies.isEmpty()) return
+    // One currency, for example with "Show amounts in" set, needs no switch.
+    if (currencies.size <= 1) return
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),

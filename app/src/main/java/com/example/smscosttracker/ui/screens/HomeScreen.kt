@@ -177,12 +177,13 @@ fun HomeScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    // Scrolls so many currencies never squeeze the account picker.
+                    // Scrolls so many currencies never squeeze the account picker; one currency
+                    // (for example with "Show amounts in" set) needs no chips.
                     Row(
                         modifier = Modifier.weight(1f).horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        currencies.forEach { code ->
+                        if (currencies.size > 1) currencies.forEach { code ->
                             LedgerChip(
                                 text = code,
                                 selected = code == currency,

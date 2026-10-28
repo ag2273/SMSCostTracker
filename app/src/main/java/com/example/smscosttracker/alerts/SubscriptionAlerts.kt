@@ -47,7 +47,8 @@ object SubscriptionAlerts {
         val preferences = AlertPreferences(context)
         val enabled = preferences.enabledTypes
         if (enabled.isEmpty() || !OnboardingPreferences(context).complete) return 0
-        val repository = TransactionRepository(AppDatabase.get(context))
+        val display = OnboardingPreferences(context).displayCurrency.ifBlank { null }
+        val repository = TransactionRepository(AppDatabase.get(context)) { display }
         val shown = preferences.shownIds
         val fresh = RecurringAlerts.due(repository.recurringSeries(), today, enabled)
             .filter { it.id !in shown }

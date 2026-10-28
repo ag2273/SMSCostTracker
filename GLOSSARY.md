@@ -83,3 +83,6 @@ The currency a card's or account's amounts are shown in. The user chooses it in 
 
 ## Linked account
 The account a debit card draws from. A linked debit card uses its account's currency, and filtering by the account includes the card's Transactions. Credit cards are never linked.
+
+## Display currency
+The one currency every screen, the CSV and alerts show amounts in when the user sets "Show amounts in" in Settings. Each Transaction converts with the Rate version in effect when it happened; its stated amount stays visible in its details. When unset, amounts are in each Account currency.

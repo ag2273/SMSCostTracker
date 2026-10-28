@@ -37,6 +37,7 @@ import androidx.compose.material.icons.outlined.Event
 import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.Payments
 import androidx.compose.material.icons.outlined.PriceChange
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Schedule
@@ -142,9 +143,12 @@ fun SettingsScreen(
     onOpenReimport: () -> Unit,
     onOpenExport: () -> Unit,
     onOpenRates: () -> Unit,
+    onDisplayCurrencyChanged: () -> Unit,
     onRestartOnboarding: () -> Unit
 ) {
     val context = LocalContext.current
+    var displayCurrency by remember { mutableStateOf(preferences.displayCurrency) }
+    var choosingDisplay by remember { mutableStateOf(false) }
     val versionName = remember(context) {
         runCatching {
             context.packageManager.getPackageInfo(context.packageName, 0).versionName
@@ -308,12 +312,45 @@ fun SettingsScreen(
             Spacer(Modifier.height(18.dp))
             SectionLabel("CURRENCY")
             LedgerCard {
-                SelectRow(
-                    label = "Exchange rates",
-                    value = "USD, SAR, EGP, EUR and GBP · built in, change them any time",
-                    icon = Icons.Outlined.CurrencyExchange,
-                    onClick = onOpenRates
-                )
+                Column {
+                    SelectRow(
+                        label = "Show amounts in",
+                        value = if (displayCurrency.isBlank()) {
+                            "Each card's or account's currency"
+                        } else {
+                            "$displayCurrency on every screen, converted at each day's rate"
+                        },
+                        icon = Icons.Outlined.Payments,
+                        trailing = displayCurrency.ifBlank { "Own" },
+                        onClick = { choosingDisplay = !choosingDisplay }
+                    )
+                    if (choosingDisplay) {
+                        Column(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            (listOf("") + ExchangeRates.SUPPORTED).forEach { code ->
+                                ChoiceRow(
+                                    label = if (code.isBlank()) "Each card's or account's currency" else code,
+                                    selected = code == displayCurrency,
+                                    onClick = {
+                                        displayCurrency = code
+                                        preferences.displayCurrency = code
+                                        choosingDisplay = false
+                                        onDisplayCurrencyChanged()
+                                    }
+                                )
+                            }
+                        }
+                    }
+                    LedgerDivider()
+                    SelectRow(
+                        label = "Exchange rates",
+                        value = "USD, SAR, EGP, EUR and GBP · built in, change them any time",
+                        icon = Icons.Outlined.CurrencyExchange,
+                        onClick = onOpenRates
+                    )
+                }
             }
 
             Spacer(Modifier.height(18.dp))
