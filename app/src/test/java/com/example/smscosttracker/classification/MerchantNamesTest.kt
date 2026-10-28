@@ -61,4 +61,11 @@ class MerchantNamesTest {
 
         assertEquals("Unknown", groups.displayName("Unknown"))
     }
+
+    @Test
+    fun `a bill reference before the payee is ignored but short numbers in names are kept`() {
+        assertEquals("mobily postpaid", MerchantNames.key("7016213340; Mobily - Postpaid"))
+        assertEquals(MerchantNames.key("Zain - Postpaid"), MerchantNames.key("7013489330; Zain - Postpaid"))
+        assertEquals("7 eleven", MerchantNames.key("7-Eleven"))
+    }
 }

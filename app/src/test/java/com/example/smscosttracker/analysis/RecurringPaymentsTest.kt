@@ -221,6 +221,91 @@ class RecurringPaymentsTest {
     }
 
     @Test
+    fun `bill that paused and resumed is current, not ended`() {
+        val before = monthly("Mobily - Postpaid", LocalDate.of(2025, 2, 1), listOf(38_290L, 37_835, 38_100))
+        val after = monthly("Mobily - Postpaid", LocalDate.of(2026, 7, 5), listOf(38_180L, 37_835, 37_835, 37_835))
+
+        val series = detect(before + after, LocalDate.of(2026, 10, 20)).single()
+
+        assertEquals(RecurringStatus.ACTIVE, series.status)
+        assertEquals(7, series.occurrences)
+        assertEquals(LocalDate.of(2025, 2, 1), series.firstDate)
+        assertEquals(LocalDate.of(2026, 11, 5), series.nextExpected)
+    }
+
+    @Test
+    fun `isolated old payments and partial payments do not hide a fixed bill`() {
+        val isolated = listOf(
+            transaction("Mobily - Postpaid", LocalDate.of(2023, 6, 2), 37_835),
+            transaction("Mobily - Postpaid", LocalDate.of(2023, 11, 1), 39_767),
+            transaction("Mobily - Postpaid", LocalDate.of(2024, 5, 2), 38_364)
+        )
+        val bill = monthly("Mobily - Postpaid", LocalDate.of(2026, 5, 5), List(6) { 37_835L })
+        val partials = listOf(
+            transaction("Mobily - Postpaid", LocalDate.of(2026, 6, 18), 13_225),
+            transaction("Mobily - Postpaid", LocalDate.of(2026, 8, 14), 2_300)
+        )
+
+        val series = detect(isolated + bill + partials, LocalDate.of(2026, 10, 20)).single()
+
+        assertEquals(RecurringStatus.ACTIVE, series.status)
+        assertEquals(AmountPattern.FIXED, series.amountPattern)
+        assertEquals(6, series.occurrences)
+    }
+
+    @Test
+    fun `bill reference before the payee does not split the merchant`() {
+        val rows = monthly("Zain - Postpaid", LocalDate.of(2026, 6, 3), List(3) { 23_900L }) +
+            transaction("7013489330; Zain - Postpaid", LocalDate.of(2026, 9, 1), 23_900) +
+            transaction("7086860433; Zain - Postpaid", LocalDate.of(2026, 10, 2), 23_900)
+
+        val series = detect(rows, LocalDate.of(2026, 10, 20)).single()
+        assertEquals("zain postpaid|SAR", series.key)
+        assertEquals(5, series.occurrences)
+    }
+
+    @Test
+    fun `same price bought every day is not a weekly subscription`() {
+        val rows = (0 until 40).map { day -> transaction("Barn's", LocalDate.of(2026, 1, 1).plusDays(day.toLong()), 1_500) }
+        assertTrue(detect(rows, LocalDate.of(2026, 2, 15)).isEmpty())
+    }
+
+    @Test
+    fun `a cycle the user chose tracks a merchant detection missed`() {
+        val rows = listOf(
+            transaction("Zain", LocalDate.of(2026, 9, 28), 23_900),
+            transaction("Zain", LocalDate.of(2026, 10, 18), 6_900)
+        )
+        assertTrue(detect(rows, LocalDate.of(2026, 10, 20)).isEmpty())
+
+        val tracked = RecurringOverrideEntity(
+            "zain|SAR",
+            RecurringOverrideState.CONFIRMED.name,
+            updatedAt = 1,
+            cycle = RecurringCycle.MONTHLY.name
+        )
+        val series = detect(rows, LocalDate.of(2026, 10, 20), listOf(tracked)).single()
+
+        assertEquals(RecurringCycle.MONTHLY, series.cycle)
+        assertTrue(series.confirmed)
+        assertEquals(LocalDate.of(2026, 11, 18), series.nextExpected)
+    }
+
+    @Test
+    fun `a chosen cycle replaces the detected one`() {
+        val rows = monthly("Tawuniya", LocalDate.of(2026, 1, 10), List(6) { 60_000L })
+        val quarterly = RecurringOverrideEntity(
+            "tawuniya|SAR",
+            RecurringOverrideState.CONFIRMED.name,
+            updatedAt = 1,
+            cycle = RecurringCycle.QUARTERLY.name
+        )
+
+        val series = detect(rows, LocalDate.of(2026, 6, 20), listOf(quarterly)).single()
+        assertEquals(RecurringCycle.QUARTERLY, series.cycle)
+    }
+
+    @Test
     fun `unknown merchant is never a series`() {
         val rows = monthly("Unknown", LocalDate.of(2026, 1, 15), List(6) { 4_900L })
         assertTrue(detect(rows, LocalDate.of(2026, 6, 20)).isEmpty())

@@ -15,6 +15,7 @@ data class SubscriptionTotal(val currency: String, val monthlyMinor: Long, val c
 /** Turns detected recurring series into what the Subscriptions screen and Home card show. */
 object Subscriptions {
     const val DUE_SOON_DAYS = 7L
+    const val ENDED_SHOWN_MONTHS = 12L
 
     /** What a series costs per month: yearly and quarterly spread out, weekly times 52 / 12. */
     fun monthlyMinor(series: RecurringSeries): Long = when (series.cycle) {
@@ -39,8 +40,12 @@ object Subscriptions {
     fun current(series: List<RecurringSeries>): List<RecurringSeries> =
         series.filter { it.status != RecurringStatus.ENDED }.sortedWith(compareBy({ it.nextExpected }, { it.merchant }))
 
-    fun ended(series: List<RecurringSeries>): List<RecurringSeries> =
-        series.filter { it.status == RecurringStatus.ENDED }.sortedByDescending { it.lastDate }
+    /** Series that stopped within the last year; older ones are history, not subscriptions. */
+    fun ended(series: List<RecurringSeries>, today: LocalDate): List<RecurringSeries> {
+        val since = today.minusMonths(ENDED_SHOWN_MONTHS)
+        return series.filter { it.status == RecurringStatus.ENDED && !it.lastDate.isBefore(since) }
+            .sortedByDescending { it.lastDate }
+    }
 
     /** Monthly totals of current series, one per currency and never mixed, largest first. */
     fun monthlyTotals(series: List<RecurringSeries>): List<SubscriptionTotal> =

@@ -24,12 +24,15 @@ object MerchantNames {
             .filter { it.isNotEmpty() }
             .map { brandAliases[it] ?: it }
             .toMutableList()
-        while (tokens.size > 1 && tokens.first() in prefixes) tokens.removeAt(0)
+        while (tokens.size > 1 && (tokens.first() in prefixes || tokens.first().isReference())) tokens.removeAt(0)
         while (tokens.size > 1 && (tokens.last() in trailingNoise || tokens.last().all(Char::isDigit))) {
             tokens.removeAt(tokens.lastIndex)
         }
         return tokens.joinToString(" ")
     }
+
+    /** A bill or payment reference written before the payee ("7016213340; Mobily - Postpaid"). */
+    private fun String.isReference() = length >= 5 && all(Char::isDigit)
 }
 
 /**

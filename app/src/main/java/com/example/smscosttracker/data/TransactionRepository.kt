@@ -1,5 +1,6 @@
 package com.example.smscosttracker.data
 
+import com.example.smscosttracker.analysis.RecurringCycle
 import com.example.smscosttracker.analysis.RecurringOverrideState
 import com.example.smscosttracker.analysis.RecurringPayments
 import com.example.smscosttracker.analysis.RecurringSeries
@@ -164,27 +165,49 @@ class TransactionRepository(private val database: AppDatabase) {
         RecurringPayments.detect(transactions, database.recurringOverrideDao().getAll())
 
     fun confirmRecurring(series: RecurringSeries) {
-        val name = database.recurringOverrideDao().get(series.key)?.name
-        saveRecurringOverride(series, RecurringOverrideState.CONFIRMED, name)
+        val existing = database.recurringOverrideDao().get(series.key)
+        saveRecurringOverride(series.key, RecurringOverrideState.CONFIRMED, existing?.name, existing?.cycle)
     }
 
     /** Renaming a series also confirms it. */
     fun renameRecurring(series: RecurringSeries, name: String) {
-        saveRecurringOverride(series, RecurringOverrideState.CONFIRMED, name.trim().takeIf { it.isNotEmpty() })
+        val cycle = database.recurringOverrideDao().get(series.key)?.cycle
+        saveRecurringOverride(series.key, RecurringOverrideState.CONFIRMED, name.trim().takeIf { it.isNotEmpty() }, cycle)
     }
+
+    /** Choosing how often a series repeats confirms it and makes detection follow that cycle. */
+    fun setRecurringCycle(series: RecurringSeries, cycle: RecurringCycle) {
+        val name = database.recurringOverrideDao().get(series.key)?.name
+        saveRecurringOverride(series.key, RecurringOverrideState.CONFIRMED, name, cycle.name)
+    }
+
+    /** Tracks [transaction]'s merchant as a subscription even when detection did not find one. */
+    fun trackAsSubscription(transaction: TransactionEntity, cycle: RecurringCycle) {
+        val key = recurringKey(transaction)
+        val name = database.recurringOverrideDao().get(key)?.name
+        saveRecurringOverride(key, RecurringOverrideState.CONFIRMED, name, cycle.name)
+    }
+
+    /** The series [transaction] belongs to, if one is detected or tracked. */
+    fun recurringSeriesFor(transaction: TransactionEntity): RecurringSeries? =
+        recurringSeries().firstOrNull { transaction.id in it.transactionIds }
 
     /** A dismissed series is not suggested again, including after a re-parse. */
     fun dismissRecurring(series: RecurringSeries) {
-        saveRecurringOverride(series, RecurringOverrideState.DISMISSED, null)
+        saveRecurringOverride(series.key, RecurringOverrideState.DISMISSED, null, null)
     }
 
-    private fun saveRecurringOverride(series: RecurringSeries, state: RecurringOverrideState, name: String?) {
+    private fun recurringKey(transaction: TransactionEntity) =
+        "${MerchantNames.key(transaction.merchant)}|${transaction.currency}"
+
+    private fun saveRecurringOverride(key: String, state: RecurringOverrideState, name: String?, cycle: String?) {
         database.recurringOverrideDao().upsert(
             RecurringOverrideEntity(
-                seriesKey = series.key,
+                seriesKey = key,
                 state = state.name,
                 name = name,
-                updatedAt = System.currentTimeMillis()
+                updatedAt = System.currentTimeMillis(),
+                cycle = cycle
             )
         )
     }

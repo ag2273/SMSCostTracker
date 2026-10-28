@@ -45,6 +45,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.smscosttracker.analysis.DatePreset
+import com.example.smscosttracker.analysis.RecurringCycle
+import com.example.smscosttracker.analysis.RecurringSeries
 import com.example.smscosttracker.analysis.TransactionFilterState
 import com.example.smscosttracker.analysis.TransactionFilters
 import com.example.smscosttracker.analysis.TransactionReview
@@ -394,6 +396,8 @@ fun TransactionDetailSheet(
     var labelling by remember { mutableStateOf<RawSmsEntity?>(null) }
     var merging by remember { mutableStateOf(false) }
     var merged by remember { mutableStateOf(false) }
+    var subscription by remember { mutableStateOf<RecurringSeries?>(null) }
+    var choosingCycle by remember { mutableStateOf(false) }
     val formatter = remember {
         DateTimeFormatter.ofPattern("d MMM yyyy · HH:mm", Locale.ENGLISH)
             .withZone(ZoneId.systemDefault())
@@ -405,7 +409,9 @@ fun TransactionDetailSheet(
             val loadedCandidates = repository.candidateInstruments(transaction)
             val loadedLabel = loadedMessages.firstOrNull()?.let { repository.messageLabel(it.id) }
             val loadedMerged = repository.hasMerges(transaction.merchant)
+            val loadedSubscription = repository.recurringSeriesFor(transaction)
             Handler(Looper.getMainLooper()).post {
+                subscription = loadedSubscription
                 messages = loadedMessages
                 candidates = loadedCandidates
                 label = loadedLabel
@@ -632,6 +638,20 @@ fun TransactionDetailSheet(
                     }
                 }
             }
+            Spacer(Modifier.height(12.dp))
+            SubscriptionCard(
+                subscription = subscription,
+                loading = loading,
+                choosing = choosingCycle,
+                onChoose = { choosingCycle = !choosingCycle },
+                onTrack = { cycle ->
+                    choosingCycle = false
+                    thread {
+                        repository.trackAsSubscription(transaction, cycle)
+                        Handler(Looper.getMainLooper()).post { onChanged() }
+                    }
+                }
+            )
             Spacer(Modifier.height(18.dp))
             PrimaryButton("Change category", onCategory)
             SecondaryButton(
@@ -936,6 +956,44 @@ fun MessageLabelSheet(
                     onClick = onDismiss,
                     modifier = Modifier.align(Alignment.CenterHorizontally)
                 )
+            }
+        }
+    }
+}
+
+/** Shows the subscription a transaction belongs to, or lets the user track its merchant as one. */
+@Composable
+private fun SubscriptionCard(
+    subscription: RecurringSeries?,
+    loading: Boolean,
+    choosing: Boolean,
+    onChoose: () -> Unit,
+    onTrack: (RecurringCycle) -> Unit
+) {
+    if (loading) return
+    LedgerCard {
+        Column(modifier = Modifier.padding(15.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Subscription", style = MaterialTheme.typography.titleMedium, color = Ledger.Ink)
+            if (subscription != null) {
+                Text(
+                    "Part of ${subscription.merchant} · ${subscription.cycle.label.lowercase()}. " +
+                        "Change how often it repeats from Subscriptions.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Ledger.Muted
+                )
+            } else {
+                Text(
+                    "Not detected as a repeating payment. If it is one, choose how often it repeats.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Ledger.Muted
+                )
+                if (choosing) {
+                    RecurringCycle.entries.forEach { cycle ->
+                        ChoiceRow(label = cycle.label, selected = false, onClick = { onTrack(cycle) })
+                    }
+                } else {
+                    SecondaryButton(text = "Track as subscription", onClick = onChoose)
+                }
             }
         }
     }

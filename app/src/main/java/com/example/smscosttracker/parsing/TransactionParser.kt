@@ -26,7 +26,7 @@ sealed interface ParseOutcome {
  * decide the message type. No rule depends on which bank sent the message.
  */
 object TransactionParser {
-    const val PARSER_VERSION = 8
+    const val PARSER_VERSION = 9
 
     private const val UNKNOWN_MERCHANT = "Unknown"
     private const val ATM_MERCHANT = "ATM withdrawal"

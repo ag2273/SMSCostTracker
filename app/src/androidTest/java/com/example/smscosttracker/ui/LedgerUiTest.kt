@@ -293,4 +293,31 @@ class LedgerUiTest {
         waitForText("Past payments")
         compose.onNodeWithText("Confirm subscription").performScrollTo().assertExists()
     }
+
+    @Test
+    fun trackAsSubscriptionAddsTheMerchant() {
+        val transaction = storeTransaction("Zain", 23_900)
+        assertTrue(repository.recurringSeries().isEmpty())
+
+        compose.setContent {
+            SmsCostTrackerTheme {
+                TransactionDetailSheet(
+                    transaction = transaction,
+                    repository = repository,
+                    onDismiss = {},
+                    onCategory = {},
+                    onChanged = {}
+                )
+            }
+        }
+
+        waitForText("Track as subscription")
+        compose.onNodeWithText("Track as subscription").performScrollTo().performClick()
+        compose.onNodeWithText("Monthly").performScrollTo().performClick()
+
+        compose.waitUntil(timeoutMillis = 10_000) { repository.recurringSeries().isNotEmpty() }
+        val series = repository.recurringSeries().single()
+        assertEquals("Zain", series.merchant)
+        assertTrue(series.confirmed)
+    }
 }

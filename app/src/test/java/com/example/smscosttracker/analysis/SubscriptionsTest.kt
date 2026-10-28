@@ -94,10 +94,11 @@ class SubscriptionsTest {
             series("Later", lastDate = LocalDate.of(2026, 10, 20)),
             series("Sooner", lastDate = LocalDate.of(2026, 10, 2)),
             series("Old", lastDate = LocalDate.of(2026, 3, 1), status = RecurringStatus.ENDED),
-            series("Recent", lastDate = LocalDate.of(2026, 6, 1), status = RecurringStatus.ENDED)
+            series("Recent", lastDate = LocalDate.of(2026, 6, 1), status = RecurringStatus.ENDED),
+            series("Years ago", lastDate = LocalDate.of(2018, 9, 7), status = RecurringStatus.ENDED)
         )
 
         assertEquals(listOf("Sooner", "Later"), Subscriptions.current(all).map { it.merchant })
-        assertEquals(listOf("Recent", "Old"), Subscriptions.ended(all).map { it.merchant })
+        assertEquals(listOf("Recent", "Old"), Subscriptions.ended(all, LocalDate.of(2026, 10, 28)).map { it.merchant })
     }
 }
