@@ -83,10 +83,11 @@ fun SubscriptionsScreen(
     repository: TransactionRepository,
     refreshKey: Int,
     onBack: () -> Unit,
-    onChanged: () -> Unit
+    onChanged: () -> Unit,
+    initialSeriesKey: String? = null
 ) {
     val state = rememberRecurringSeries(repository, refreshKey)
-    var selectedKey by remember { mutableStateOf<String?>(null) }
+    var selectedKey by remember(initialSeriesKey) { mutableStateOf(initialSeriesKey) }
     val today = LocalDate.now()
     val current = remember(state.series) { Subscriptions.current(state.series) }
     val ended = remember(state.series) { Subscriptions.ended(state.series) }

@@ -68,3 +68,6 @@ The user's answer about a Recurring series: confirmed (optionally renamed) or di
 
 ## Subscription
 The UI name for a Recurring series. The Subscriptions screen totals current series per currency as a monthly equivalent (yearly ÷ 12, quarterly ÷ 3, weekly × 52 ÷ 12) and marks each one Active, Late, Ended or Price changed.
+
+## Alert
+A local notification about a confirmed Subscription: Late (no payment 3 days after the expected date), Price changed (a fixed-amount series charged more than 5% above or below its earlier price) or Due tomorrow. Each event alerts once. Alerts are off until the user turns them on in Settings, and are checked after each Sync and once a day.

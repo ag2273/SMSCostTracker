@@ -225,7 +225,7 @@ class LedgerUiTest {
         }
     }
 
-    private fun showSubscriptions() {
+    private fun showSubscriptions(initialSeriesKey: String? = null) {
         compose.setContent {
             SmsCostTrackerTheme {
                 var refreshKey by remember { mutableStateOf(0) }
@@ -233,7 +233,8 @@ class LedgerUiTest {
                     repository = repository,
                     refreshKey = refreshKey,
                     onBack = {},
-                    onChanged = { refreshKey++ }
+                    onChanged = { refreshKey++ },
+                    initialSeriesKey = initialSeriesKey
                 )
             }
         }
@@ -281,5 +282,15 @@ class LedgerUiTest {
         TransactionImporter(database).rebuildFromStored()
         storeMonthly("Netflix", 4_900, months = 4)
         assertTrue(repository.recurringSeries().isEmpty())
+    }
+
+    @Test
+    fun alertTapOpensTheSeriesDetail() {
+        storeMonthly("Netflix", 4_900, months = 4)
+
+        showSubscriptions(initialSeriesKey = "netflix|SAR")
+
+        waitForText("Past payments")
+        compose.onNodeWithText("Confirm subscription").performScrollTo().assertExists()
     }
 }
