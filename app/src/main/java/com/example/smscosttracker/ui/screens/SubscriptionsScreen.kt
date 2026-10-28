@@ -5,6 +5,7 @@ import android.os.Looper
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -53,6 +54,7 @@ import com.example.smscosttracker.ui.components.Avatar
 import com.example.smscosttracker.ui.components.EmptyState
 import com.example.smscosttracker.ui.components.IconTile
 import com.example.smscosttracker.ui.components.LedgerCard
+import com.example.smscosttracker.ui.components.LedgerChip
 import com.example.smscosttracker.ui.components.LedgerDivider
 import com.example.smscosttracker.ui.components.LedgerTextField
 import com.example.smscosttracker.ui.components.PageHeader
@@ -90,7 +92,7 @@ fun SubscriptionsScreen(
     var selectedKey by remember(initialSeriesKey) { mutableStateOf(initialSeriesKey) }
     val today = LocalDate.now()
     val current = remember(state.series) { Subscriptions.current(state.series) }
-    val ended = remember(state.series) { Subscriptions.ended(state.series) }
+    val ended = remember(state.series, today) { Subscriptions.ended(state.series, today) }
     val totals = remember(state.series) { Subscriptions.monthlyTotals(state.series) }
     val dueSoon = remember(state.series, today) { Subscriptions.dueSoon(state.series, today).size }
     val colorByKey = remember(state.series) {
@@ -114,6 +116,7 @@ fun SubscriptionsScreen(
             onClose = { selectedKey = null },
             onConfirm = { act { repository.confirmRecurring(series) } },
             onRename = { name -> act { repository.renameRecurring(series, name) } },
+            onSetCycle = { cycle -> act { repository.setRecurringCycle(series, cycle) } },
             onDismissSeries = { act { repository.dismissRecurring(series) } }
         )
     }
@@ -136,7 +139,7 @@ fun SubscriptionsScreen(
                     onBack = onBack
                 )
                 Spacer(Modifier.height(14.dp))
-                if (state.series.isEmpty()) {
+                if (current.isEmpty() && ended.isEmpty()) {
                     EmptyState(
                         icon = Icons.Outlined.Autorenew,
                         title = "No subscriptions found yet",
@@ -379,6 +382,7 @@ private fun SubscriptionDetailSheet(
     onClose: () -> Unit,
     onConfirm: () -> Unit,
     onRename: (String) -> Unit,
+    onSetCycle: (RecurringCycle) -> Unit,
     onDismissSeries: () -> Unit
 ) {
     var renaming by remember(series.key) { mutableStateOf(false) }
@@ -453,6 +457,26 @@ private fun SubscriptionDetailSheet(
                     modifier = Modifier.padding(top = 12.dp)
                 )
             }
+            Spacer(Modifier.height(16.dp))
+            SectionRow(title = "Repeats", action = null)
+            Row(
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                RecurringCycle.entries.forEach { cycle ->
+                    LedgerChip(
+                        text = cycle.label,
+                        selected = cycle == series.cycle,
+                        onClick = { if (cycle != series.cycle) onSetCycle(cycle) }
+                    )
+                }
+            }
+            Text(
+                "Wrong? Pick how often it really repeats. Next dates and alerts follow your choice.",
+                style = MaterialTheme.typography.labelSmall,
+                color = Ledger.Muted,
+                modifier = Modifier.padding(top = 6.dp)
+            )
             Spacer(Modifier.height(16.dp))
             SectionRow(title = "Past payments", action = null)
             Spacer(Modifier.height(6.dp))

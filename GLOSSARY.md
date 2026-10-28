@@ -58,13 +58,13 @@ Offline aggregation and filtering of Transactions into lists and charts.
 A filter over Transaction occurrence time: all time, a month, a quarter, or a custom start and end.
 
 ## Recurring series
-Payments to one Merchant in one currency that repeat on a Cycle, found by Analysis from stored Transactions. It has a typical Amount (Fixed within ±5%, or Variable such as utilities), a last and next expected date, and a status: Active, Late (one expected payment missed) or Ended (two or more missed). A series is split by Account only when two series run at one Merchant on different cards.
+Payments to one Merchant in one currency that repeat on a Cycle, found by Analysis from stored Transactions. It has a typical Amount (Fixed within ±5%, or Variable such as utilities), a last and next expected date, and a status: Active, Late (one expected payment missed) or Ended (two or more missed). A series is split by Account only when two series run at one Merchant on different cards. A pause longer than two cycles does not end a series; when payments resume, it is current again. Series that ended more than a year ago are not listed.
 
 ## Cycle
 How often a Recurring series repeats: weekly, monthly (±3 days), quarterly or yearly. Monthly and longer cycles follow the calendar date of the last payment.
 
 ## Recurring override
-The user's answer about a Recurring series: confirmed (optionally renamed) or dismissed. It is kept by series key (Merchant key, currency and, when split, Account) so a dismissed series is not suggested again after a re-parse.
+The user's answer about a Recurring series: confirmed (optionally renamed, optionally with the Cycle the user chose) or dismissed. Choosing a Cycle, or tracking a Merchant as a subscription from a Transaction, makes detection follow that Cycle even when it would not have found the series. It is kept by series key (Merchant key, currency and, when split, Account) so a dismissed series is not suggested again after a re-parse.
 
 ## Subscription
 The UI name for a Recurring series. The Subscriptions screen totals current series per currency as a monthly equivalent (yearly ÷ 12, quarterly ÷ 3, weekly × 52 ÷ 12) and marks each one Active, Late, Ended or Price changed.

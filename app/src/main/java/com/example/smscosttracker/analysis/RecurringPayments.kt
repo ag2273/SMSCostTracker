@@ -67,7 +67,20 @@ object RecurringPayments {
 
     private class Occurrence(val date: LocalDate, val transaction: TransactionEntity)
 
-    private class Chain(val cycle: RecurringCycle, val kept: List<Occurrence>, val extras: Int)
+    private class Walk(val kept: List<Occurrence>, val single: Int, val skipped: Int)
+
+    private class Chain(
+        val cycle: RecurringCycle,
+        val kept: List<Occurrence>,
+        /** Off-cycle payments inside the stretches that repeat; isolated payments elsewhere are not counted. */
+        val extras: List<Occurrence>,
+        val single: Int,
+        val skipped: Int,
+        val longestSegment: Int
+    )
+
+    /** [extraWeight] is two per off-cycle payment, one when its amount differs from a fixed price. */
+    private class Candidate(val chain: Chain, val runs: List<List<Long>>, val fixed: Boolean, val extraWeight: Int)
 
     fun detect(
         transactions: List<TransactionEntity>,
@@ -76,6 +89,12 @@ object RecurringPayments {
         zone: ZoneId = ZoneId.systemDefault()
     ): List<RecurringSeries> {
         val overrideByKey = overrides.associateBy { it.seriesKey }
+        // A cycle the user chose ("Track as subscription") replaces detection for that series.
+        fun forcedCycle(key: String): RecurringCycle? = overrideByKey[key]
+            ?.takeIf { it.state == RecurringOverrideState.CONFIRMED.name }
+            ?.cycle
+            ?.let { cycle -> RecurringCycle.entries.firstOrNull { it.name == cycle } }
+
         val series = transactions
             .groupBy { MerchantNames.key(it.merchant) to it.currency }
             .filterKeys { (merchantKey, _) -> merchantKey.isNotEmpty() && merchantKey != "unknown" }
@@ -83,12 +102,15 @@ object RecurringPayments {
                 val baseKey = "${group.first}|${group.second}"
                 val occurrences = rows.map { Occurrence(it.occurredAt.toLocalDate(zone), it) }
                     .sortedWith(compareBy({ it.date }, { it.transaction.occurredAt }))
-                val whole = seriesFor(occurrences, baseKey, "", today)
+                val whole = seriesFor(occurrences, baseKey, "", today, forcedCycle(baseKey))
                 if (whole != null) return@flatMap listOf(whole)
                 occurrences.groupBy { it.transaction.account }
                     .filterKeys { it.isNotBlank() }
                     .takeIf { it.size > 1 }
-                    ?.mapNotNull { (account, subset) -> seriesFor(subset, "$baseKey|$account", account, today) }
+                    ?.mapNotNull { (account, subset) ->
+                        val key = "$baseKey|$account"
+                        seriesFor(subset, key, account, today, forcedCycle(key))
+                    }
                     .orEmpty()
             }
         return series
@@ -110,18 +132,27 @@ object RecurringPayments {
         occurrences: List<Occurrence>,
         key: String,
         account: String,
-        today: LocalDate
+        today: LocalDate,
+        forced: RecurringCycle? = null
     ): RecurringSeries? {
-        if (occurrences.size < RecurringCycle.YEARLY.minOccurrences) return null
-        val chain = RecurringCycle.entries
-            .mapNotNull { bestChain(occurrences, it) }
-            .maxWithOrNull(compareBy<Chain>({ it.kept.size }, { -it.extras }))
-            ?: return null
+        if (occurrences.isEmpty()) return null
+        val candidate = if (forced != null) {
+            candidate(chain(occurrences, forced).let { chain ->
+                // The user said it repeats, so even a lone payment starts the series.
+                if (chain.kept.isNotEmpty()) chain else Chain(forced, listOf(occurrences.last()), emptyList(), 0, 0, 1)
+            })
+        } else {
+            if (occurrences.size < RecurringCycle.YEARLY.minOccurrences) return null
+            RecurringCycle.entries
+                .map { candidate(chain(occurrences, it)) }
+                .filter { valid(it) }
+                .maxWithOrNull(compareBy<Candidate>({ it.chain.kept.size }, { -it.extraWeight }))
+                ?: return null
+        }
+        val chain = candidate.chain
+        val runs = candidate.runs
+        val fixed = candidate.fixed
         val amounts = chain.kept.map { it.transaction.amountMinor }
-        val runs = priceRuns(amounts)
-        val fixed = runs.size <= 3 && runs.dropLast(1).all { it.size >= 2 }
-        // Two charges a year apart, or a weekly shop visit, only count when the amount is fixed.
-        if (!fixed && (chain.kept.size < 3 || chain.cycle == RecurringCycle.WEEKLY)) return null
 
         val first = chain.kept.first()
         val last = chain.kept.last()
@@ -162,13 +193,65 @@ object RecurringPayments {
         )
     }
 
+    private fun candidate(chain: Chain): Candidate {
+        val runs = priceRuns(chain.kept.map { it.transaction.amountMinor })
+        val fixed = runs.isNotEmpty() && runs.size <= 3 && runs.dropLast(1).all { it.size >= 2 }
+        // For a fixed price, a payment of another amount (a partial payment, a one-off purchase)
+        // weighs half as much against the series as an off-cycle payment of the same amount.
+        val prices = runs.map { median(it) }
+        val weight = chain.extras.map { extra ->
+            if (fixed && prices.none { near(extra.transaction.amountMinor, it) }) 1 else 2
+        }.sum()
+        return Candidate(chain, runs, fixed, weight)
+    }
+
+    private fun valid(candidate: Candidate): Boolean {
+        val chain = candidate.chain
+        val cycle = chain.cycle
+        // Two charges a year apart, or a weekly shop visit, only count when the amount is fixed.
+        if (!candidate.fixed && (chain.kept.size < 3 || cycle == RecurringCycle.WEEKLY)) return false
+        return chain.kept.size >= cycle.minOccurrences &&
+            chain.longestSegment >= cycle.minOccurrences &&
+            candidate.extraWeight * 2 <= chain.kept.size &&
+            chain.skipped <= chain.single / 2
+    }
+
     /**
-     * Walks the occurrences from each of the first few as a start, keeping each one that lands a
-     * cycle (or two, for a skipped payment) after the last kept one. Occurrences in between are
+     * Splits the occurrences wherever no payment came for more than two cycles (a paused
+     * subscription) and walks each part, so a series that resumed is still found and current.
+     * Parts with a single payment are left out.
+     */
+    private fun chain(occurrences: List<Occurrence>, cycle: RecurringCycle): Chain {
+        val segments = mutableListOf(mutableListOf(occurrences.first()))
+        for (i in 1 until occurrences.size) {
+            val previous = occurrences[i - 1].date
+            if (occurrences[i].date.isAfter(cycle.advance(previous, MAX_SKIPPED_CYCLES).plusDays(cycle.toleranceDays))) {
+                segments += mutableListOf(occurrences[i])
+            } else {
+                segments.last() += occurrences[i]
+            }
+        }
+        val walked = segments.map { it to bestWalk(it, cycle) }.filter { it.second.kept.size >= 2 }
+        val walks = walked.map { it.second }
+        val kept = walks.flatMap { it.kept }
+        val keptIds = kept.map { it.transaction.id }.toHashSet()
+        return Chain(
+            cycle = cycle,
+            kept = kept,
+            extras = walked.flatMap { it.first }.filter { it.transaction.id !in keptIds },
+            single = walks.sumOf { it.single },
+            skipped = walks.sumOf { it.skipped },
+            longestSegment = walks.maxOfOrNull { it.kept.size } ?: 0
+        )
+    }
+
+    /**
+     * Walks a part from each of its first few occurrences as a start, keeping each one that lands
+     * a cycle (or two, for a skipped payment) after the last kept one. Occurrences in between are
      * extras, such as a one-off purchase at a subscription merchant.
      */
-    private fun bestChain(occurrences: List<Occurrence>, cycle: RecurringCycle): Chain? {
-        var best: Chain? = null
+    private fun bestWalk(occurrences: List<Occurrence>, cycle: RecurringCycle): Walk {
+        var best: Walk? = null
         for (start in 0 until minOf(CHAIN_STARTS, occurrences.size)) {
             val kept = mutableListOf(occurrences[start])
             var single = 0
@@ -187,14 +270,12 @@ object RecurringPayments {
                 }
                 kept += occurrences[i]
             }
-            val extras = occurrences.size - kept.size
-            val valid = kept.size >= cycle.minOccurrences &&
-                extras * 4 <= kept.size &&
-                skipped <= single / 2
-            if (valid && (best == null || kept.size > best.kept.size)) best = Chain(cycle, kept, extras)
+            if (best == null || kept.size > best.kept.size) best = Walk(kept, single, skipped)
         }
-        return best
+        return best!!
     }
+
+    private fun near(amount: Long, price: Long): Boolean = abs(amount - price) <= price * FIXED_TOLERANCE
 
     /** Splits amounts into runs whose members stay within ±5% of the run's first amount. */
     private fun priceRuns(amounts: List<Long>): List<List<Long>> {

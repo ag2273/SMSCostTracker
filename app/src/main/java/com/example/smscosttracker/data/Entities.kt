@@ -69,5 +69,7 @@ data class RecurringOverrideEntity(
     @PrimaryKey val seriesKey: String,
     val state: String,
     val name: String? = null,
-    val updatedAt: Long
+    val updatedAt: Long,
+    /** Set when the user chose how often it repeats; detection then follows this cycle. */
+    val cycle: String? = null
 )
