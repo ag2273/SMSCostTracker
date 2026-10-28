@@ -55,6 +55,13 @@ class OnboardingPreferences(context: Context) {
             prefs.edit().putBoolean(KEY_AUTO_SYNC, value).apply()
         }
 
+    /** Download exchange rates once a day (rates set by hand are kept). */
+    var autoUpdateRates: Boolean
+        get() = prefs.getBoolean(KEY_AUTO_RATES, true)
+        set(value) {
+            prefs.edit().putBoolean(KEY_AUTO_RATES, value).apply()
+        }
+
     var lastSyncedAt: Long
         get() = prefs.getLong(KEY_LAST_SYNCED, 0L)
         set(value) {
@@ -79,5 +86,6 @@ class OnboardingPreferences(context: Context) {
         const val KEY_PARSER_VERSION = "parser_version"
         const val KEY_AUTO_SYNC = "auto_sync"
         const val KEY_LAST_SYNCED = "last_synced_at"
+        const val KEY_AUTO_RATES = "auto_update_rates"
     }
 }

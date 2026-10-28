@@ -73,3 +73,13 @@ data class RecurringOverrideEntity(
     /** Set when the user chose how often it repeats; detection then follows this cycle. */
     val cycle: String? = null
 )
+
+/** One exchange rate version: units of [currency] per US dollar, used from [effectiveFrom] on. */
+@Entity(tableName = "exchange_rates")
+data class ExchangeRateEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val currency: String,
+    val unitsPerUsd: Double,
+    val effectiveFrom: Long,
+    val source: String
+)

@@ -32,6 +32,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AccountBalance
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.CreditCard
+import androidx.compose.material.icons.outlined.CurrencyExchange
 import androidx.compose.material.icons.outlined.Event
 import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material.icons.outlined.Info
@@ -114,7 +115,8 @@ enum class SettingsRoute {
     INSTRUMENTS,
     UNPARSED,
     REIMPORT,
-    EXPORT
+    EXPORT,
+    RATES
 }
 
 private data class SettingsStats(
@@ -135,6 +137,7 @@ fun SettingsScreen(
     onOpenUnparsed: () -> Unit,
     onOpenReimport: () -> Unit,
     onOpenExport: () -> Unit,
+    onOpenRates: () -> Unit,
     onRestartOnboarding: () -> Unit
 ) {
     val context = LocalContext.current
@@ -299,6 +302,17 @@ fun SettingsScreen(
             )
 
             Spacer(Modifier.height(18.dp))
+            SectionLabel("CURRENCY")
+            LedgerCard {
+                SelectRow(
+                    label = "Exchange rates",
+                    value = "USD, SAR, EGP, EUR and GBP · downloaded or set by you",
+                    icon = Icons.Outlined.CurrencyExchange,
+                    onClick = onOpenRates
+                )
+            }
+
+            Spacer(Modifier.height(18.dp))
             SectionLabel("EXPORT")
             LedgerCard {
                 Column {
@@ -349,7 +363,8 @@ fun SettingsScreen(
                             color = Ledger.Ink
                         )
                         Text(
-                            "SMS is read and parsed locally. The app has no internet permission and never uploads messages.",
+                            "SMS is read and parsed locally and never uploaded. The internet is used only to " +
+                                "download public exchange rates; nothing about you is sent.",
                             style = MaterialTheme.typography.bodySmall,
                             color = Ledger.Muted
                         )
