@@ -55,6 +55,13 @@ class OnboardingPreferences(context: Context) {
             prefs.edit().putBoolean(KEY_AUTO_SYNC, value).apply()
         }
 
+    /** The one currency every screen shows amounts in; empty means each card's or account's own. */
+    var displayCurrency: String
+        get() = prefs.getString(KEY_DISPLAY_CURRENCY, "").orEmpty()
+        set(value) {
+            prefs.edit().putString(KEY_DISPLAY_CURRENCY, value).apply()
+        }
+
     var lastSyncedAt: Long
         get() = prefs.getLong(KEY_LAST_SYNCED, 0L)
         set(value) {
@@ -79,5 +86,6 @@ class OnboardingPreferences(context: Context) {
         const val KEY_PARSER_VERSION = "parser_version"
         const val KEY_AUTO_SYNC = "auto_sync"
         const val KEY_LAST_SYNCED = "last_synced_at"
+        const val KEY_DISPLAY_CURRENCY = "display_currency"
     }
 }

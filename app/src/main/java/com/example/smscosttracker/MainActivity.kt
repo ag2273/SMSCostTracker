@@ -110,9 +110,11 @@ class MainActivity : ComponentActivity() {
                     return@SmsCostTrackerTheme
                 }
                 val database = remember { AppDatabase.get(context) }
-                val repository = remember { TransactionRepository(database) }
-                val importer = remember { TransactionImporter(database) }
                 val preferences = remember { OnboardingPreferences(context) }
+                val repository = remember {
+                    TransactionRepository(database) { preferences.displayCurrency.ifBlank { null } }
+                }
+                val importer = remember { TransactionImporter(database) }
                 var showOnboarding by remember { mutableStateOf(!preferences.complete) }
                 var rebuilding by remember { mutableStateOf(false) }
                 var refreshKey by remember { mutableStateOf(0) }
@@ -309,6 +311,7 @@ private fun MainShell(
                         onOpenReimport = { settingsRoute = SettingsRoute.REIMPORT },
                         onOpenExport = { settingsRoute = SettingsRoute.EXPORT },
                         onOpenRates = { settingsRoute = SettingsRoute.RATES },
+                        onDisplayCurrencyChanged = onDataChanged,
                         onRestartOnboarding = onRestartOnboarding
                     )
                     SettingsRoute.INSTRUMENTS -> InstrumentsScreen(

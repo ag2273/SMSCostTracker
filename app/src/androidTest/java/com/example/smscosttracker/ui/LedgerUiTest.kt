@@ -28,7 +28,9 @@ import com.example.smscosttracker.data.TransactionImporter
 import com.example.smscosttracker.data.TransactionRepository
 import com.example.smscosttracker.classification.MerchantNames
 import com.example.smscosttracker.ml.MessageType
+import com.example.smscosttracker.analysis.HomeFilterState
 import com.example.smscosttracker.ui.screens.ActivityScreen
+import com.example.smscosttracker.ui.screens.HomeScreen
 import com.example.smscosttracker.ui.screens.ExchangeRatesScreen
 import com.example.smscosttracker.ui.screens.SubscriptionsScreen
 import com.example.smscosttracker.ui.sheets.MessageLabelSheet
@@ -387,5 +389,32 @@ class LedgerUiTest {
         assertEquals(OriginalAmount(1_000, "USD"), shown.originals[id])
         assertEquals(mapOf("SAB 1214" to "SAB 001"), shown.linkedAccounts)
         assertEquals("USD", repository.storedTransaction(id)!!.currency)
+    }
+
+    @Test
+    fun displayCurrencyChangesHomeTotals() {
+        storeTransaction("Panda", 10_000)
+        val inUsd = TransactionRepository(database) { "USD" }
+
+        compose.setContent {
+            SmsCostTrackerTheme {
+                var filter by remember { mutableStateOf(HomeFilterState()) }
+                HomeScreen(
+                    repository = inUsd,
+                    refreshKey = 0,
+                    filter = filter,
+                    onFilterChange = { filter = it },
+                    onOpenInstruments = {},
+                    onOpenActivity = {},
+                    onOpenReview = {},
+                    onOpenSubscriptions = {},
+                    onImport = {}
+                )
+            }
+        }
+
+        // SAR 100.00 at the built-in 3.75 per USD.
+        waitForText("USD 26.67")
+        assertTrue(compose.onAllNodes(hasText("SAR 100.00")).fetchSemanticsNodes().isEmpty())
     }
 }

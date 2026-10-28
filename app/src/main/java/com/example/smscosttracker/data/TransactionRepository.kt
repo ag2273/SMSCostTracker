@@ -24,7 +24,14 @@ data class UnparsedSms(
     val reason: String
 )
 
-class TransactionRepository(private val database: AppDatabase) {
+/**
+ * [displayCurrency] gives the one currency to show every amount in, or null for each card's or
+ * account's own currency (Settings → Show amounts in).
+ */
+class TransactionRepository(
+    private val database: AppDatabase,
+    private val displayCurrency: () -> String? = { null }
+) {
     // Stored SMS are only ever added, so their count tells when a re-scan is needed.
     private data class UnparsedVersion(
         val messages: Int,
@@ -38,7 +45,7 @@ class TransactionRepository(private val database: AppDatabase) {
     @Volatile
     private var candidateCache: Pair<Int, Map<Pair<String, String>, Map<TransactionChannel, Int>>>? = null
 
-    /** Transactions with amounts in their card's or account's currency; see [shownTransactions]. */
+    /** Transactions with amounts in the display currency or their card's or account's; see [shownTransactions]. */
     fun transactions(): List<TransactionEntity> = shownTransactions().transactions
 
     /**
@@ -48,7 +55,8 @@ class TransactionRepository(private val database: AppDatabase) {
     fun shownTransactions(): ShownTransactions = AccountCurrencies.convert(
         transactions = database.transactionDao().getAll(),
         profiles = instrumentProfiles(),
-        converter = ExchangeRateRepository(database).converter()
+        converter = ExchangeRateRepository(database).converter(),
+        displayCurrency = displayCurrency()?.takeIf { it.isNotBlank() }
     )
 
     /** The transaction as stored, with the amount and currency its SMS stated. */
