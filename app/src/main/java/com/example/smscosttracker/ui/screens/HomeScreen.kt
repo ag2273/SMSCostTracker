@@ -2,6 +2,7 @@ package com.example.smscosttracker.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -83,9 +84,11 @@ fun HomeScreen(
     onOpenInstruments: () -> Unit,
     onOpenActivity: () -> Unit,
     onOpenReview: () -> Unit,
+    onOpenSubscriptions: () -> Unit,
     onImport: () -> Unit
 ) {
     val state = rememberTransactions(repository, refreshKey)
+    val recurring = rememberRecurringSeries(repository, refreshKey)
     val pending = rememberPendingCount(repository, refreshKey)
     val pendingKeys = rememberPendingInstrumentKeys(repository, refreshKey)
     val reviewCount = remember(state.transactions, pendingKeys) {
@@ -174,16 +177,21 @@ fun HomeScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    currencies.forEach { code ->
-                        LedgerChip(
-                            text = code,
-                            selected = code == currency,
-                            onClick = {
-                                onFilterChange(filter.copy(currency = code, currencyInitialized = true))
-                            }
-                        )
+                    // Scrolls so many currencies never squeeze the account picker.
+                    Row(
+                        modifier = Modifier.weight(1f).horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        currencies.forEach { code ->
+                            LedgerChip(
+                                text = code,
+                                selected = code == currency,
+                                onClick = {
+                                    onFilterChange(filter.copy(currency = code, currencyInitialized = true))
+                                }
+                            )
+                        }
                     }
-                    Spacer(Modifier.weight(1f))
                     DropdownChip(
                         label = filter.account ?: "All accounts",
                         options = listOf("All accounts") + accounts,
@@ -219,6 +227,12 @@ fun HomeScreen(
                         modifier = Modifier.padding(top = 12.dp)
                     )
                 }
+                SubscriptionsCard(
+                    series = recurring.series,
+                    currency = currency,
+                    onClick = onOpenSubscriptions,
+                    modifier = Modifier.padding(top = 12.dp)
+                )
                 Spacer(Modifier.height(16.dp))
                 LedgerCard {
                     Column(modifier = Modifier.padding(16.dp)) {

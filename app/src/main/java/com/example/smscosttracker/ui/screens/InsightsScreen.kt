@@ -74,9 +74,11 @@ private data class MerchantMeta(
 @Composable
 fun InsightsScreen(
     repository: TransactionRepository,
-    refreshKey: Int
+    refreshKey: Int,
+    onOpenSubscriptions: () -> Unit
 ) {
     val state = rememberTransactions(repository, refreshKey)
+    val recurring = rememberRecurringSeries(repository, refreshKey)
     val currencies = remember(state.transactions) {
         state.transactions.map { it.currency }.filter { it.isNotBlank() }.distinct().sorted()
     }
@@ -147,6 +149,12 @@ fun InsightsScreen(
                     currencies = currencies,
                     selected = currency,
                     onSelect = { currency = it }
+                )
+                SubscriptionsCard(
+                    series = recurring.series,
+                    currency = currency,
+                    onClick = onOpenSubscriptions,
+                    modifier = Modifier.padding(top = 14.dp)
                 )
                 Spacer(Modifier.height(14.dp))
                 if (displayRows.isEmpty()) {

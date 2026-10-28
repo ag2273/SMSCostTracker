@@ -492,7 +492,7 @@ fun DropdownChip(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                Text(label, style = MaterialTheme.typography.labelMedium, color = Ledger.Ink)
+                Text(label, style = MaterialTheme.typography.labelMedium, color = Ledger.Ink, maxLines = 1, softWrap = false)
                 Icon(Icons.Outlined.KeyboardArrowDown, contentDescription = null, tint = Ledger.Muted, modifier = Modifier.size(14.dp))
             }
         }

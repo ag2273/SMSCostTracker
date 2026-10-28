@@ -53,6 +53,7 @@ import com.example.smscosttracker.ui.screens.InstrumentsScreen
 import com.example.smscosttracker.ui.screens.ReimportScreen
 import com.example.smscosttracker.ui.screens.SettingsRoute
 import com.example.smscosttracker.ui.screens.SettingsScreen
+import com.example.smscosttracker.ui.screens.SubscriptionsScreen
 import com.example.smscosttracker.ui.screens.UnparsedMessagesScreen
 import com.example.smscosttracker.ui.theme.Ledger
 import com.example.smscosttracker.ui.theme.SmsCostTrackerTheme
@@ -191,10 +192,12 @@ private fun MainShell(
     var settingsRoute by remember { mutableStateOf(SettingsRoute.OVERVIEW) }
     var homeFilter by remember { mutableStateOf(HomeFilterState()) }
     var activityFilters by remember { mutableStateOf(ActivityFilterState()) }
+    var showSubscriptions by remember { mutableStateOf(false) }
 
     BackHandler(enabled = tab == 3 && settingsRoute != SettingsRoute.OVERVIEW) {
         settingsRoute = SettingsRoute.OVERVIEW
     }
+    BackHandler(enabled = showSubscriptions) { showSubscriptions = false }
 
     Scaffold(
         containerColor = Ledger.Background,
@@ -204,13 +207,21 @@ private fun MainShell(
                 selected = tab,
                 onSelect = { index ->
                     tab = index
+                    showSubscriptions = false
                     if (index == 3) settingsRoute = SettingsRoute.OVERVIEW
                 }
             )
         }
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
-            when (tab) {
+            if (showSubscriptions) {
+                SubscriptionsScreen(
+                    repository = repository,
+                    refreshKey = refreshKey,
+                    onBack = { showSubscriptions = false },
+                    onChanged = onDataChanged
+                )
+            } else when (tab) {
                 0 -> HomeScreen(
                     repository = repository,
                     refreshKey = refreshKey,
@@ -230,6 +241,7 @@ private fun MainShell(
                         )
                         tab = 1
                     },
+                    onOpenSubscriptions = { showSubscriptions = true },
                     onImport = {
                         tab = 3
                         settingsRoute = SettingsRoute.REIMPORT
@@ -242,7 +254,11 @@ private fun MainShell(
                     onFiltersChange = { activityFilters = it },
                     onDataChanged = onDataChanged
                 )
-                2 -> InsightsScreen(repository = repository, refreshKey = refreshKey)
+                2 -> InsightsScreen(
+                    repository = repository,
+                    refreshKey = refreshKey,
+                    onOpenSubscriptions = { showSubscriptions = true }
+                )
                 3 -> when (settingsRoute) {
                     SettingsRoute.OVERVIEW -> SettingsScreen(
                         repository = repository,
