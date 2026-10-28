@@ -1,6 +1,10 @@
 package com.example.smscosttracker.data
 
+import com.example.smscosttracker.analysis.AccountCurrencies
+import com.example.smscosttracker.analysis.CardKind
+import com.example.smscosttracker.analysis.InstrumentProfile
 import com.example.smscosttracker.analysis.RecurringCycle
+import com.example.smscosttracker.analysis.ShownTransactions
 import com.example.smscosttracker.analysis.RecurringOverrideState
 import com.example.smscosttracker.analysis.RecurringPayments
 import com.example.smscosttracker.analysis.RecurringSeries
@@ -34,7 +38,36 @@ class TransactionRepository(private val database: AppDatabase) {
     @Volatile
     private var candidateCache: Pair<Int, Map<Pair<String, String>, Map<TransactionChannel, Int>>>? = null
 
-    fun transactions(): List<TransactionEntity> = database.transactionDao().getAll()
+    /** Transactions with amounts in their card's or account's currency; see [shownTransactions]. */
+    fun transactions(): List<TransactionEntity> = shownTransactions().transactions
+
+    /**
+     * Transactions converted to their card's or account's currency with the exchange rate in
+     * effect when each happened, the original amounts of converted ones, and linked debit cards.
+     */
+    fun shownTransactions(): ShownTransactions = AccountCurrencies.convert(
+        transactions = database.transactionDao().getAll(),
+        profiles = instrumentProfiles(),
+        converter = ExchangeRateRepository(database).converter()
+    )
+
+    /** The transaction as stored, with the amount and currency its SMS stated. */
+    fun storedTransaction(id: Long): TransactionEntity? = database.transactionDao().get(id)
+
+    fun instrumentProfiles(): List<InstrumentProfile> =
+        database.instrumentDao().getAll().filterNot { it.ignored }.map {
+            InstrumentProfile(
+                account = "${it.address} ${it.digits}",
+                channel = TransactionChannel.fromStorage(it.channel),
+                currency = it.currency.ifBlank { null },
+                cardKind = CardKind.entries.firstOrNull { kind -> kind.name == it.cardKind },
+                linkedAccount = it.linkedAccount.ifBlank { null }
+            )
+        }
+
+    /** The currency most of each account's stored transactions use. */
+    fun inferredCurrencies(): Map<String, String> =
+        AccountCurrencies.inferred(database.transactionDao().getAll())
 
     fun count(): Int = database.transactionDao().count()
 
@@ -43,7 +76,9 @@ class TransactionRepository(private val database: AppDatabase) {
     fun hasImportedData(): Boolean =
         database.rawSmsDao().count() > 0 || database.transactionDao().count() > 0
 
-    fun sourceMessagesFor(transaction: TransactionEntity): List<RawSmsEntity> {
+    fun sourceMessagesFor(shown: TransactionEntity): List<RawSmsEntity> {
+        // Shown amounts may be converted; the SMS match on the stored amount.
+        val transaction = storedTransaction(shown.id) ?: shown
         val instruments = configuredInstrumentMap()
         val model = SmsModelStore.load(database)
         val candidates = nearbyMessagesFor(transaction).mapNotNull { raw ->
@@ -266,7 +301,10 @@ class TransactionRepository(private val database: AppDatabase) {
                     ?: channels.maxByOrNull { it.value }!!.key,
                 messageCount = channels.values.sum(),
                 verified = stored != null,
-                ignored = stored?.ignored == true
+                ignored = stored?.ignored == true,
+                currency = stored?.currency.orEmpty(),
+                cardKind = stored?.cardKind.orEmpty(),
+                linkedAccount = stored?.linkedAccount.orEmpty()
             )
         }.sortedWith(compareBy({ it.address }, { it.digits }))
     }
@@ -278,7 +316,15 @@ class TransactionRepository(private val database: AppDatabase) {
                     address = it.address,
                     digits = it.digits,
                     channel = it.channel.name,
-                    ignored = it.ignored
+                    ignored = it.ignored,
+                    currency = it.currency,
+                    // Only cards have a kind, and only debit cards a linked account.
+                    cardKind = if (it.channel == TransactionChannel.CARD) it.cardKind else "",
+                    linkedAccount = if (it.channel == TransactionChannel.CARD && it.cardKind == CardKind.DEBIT.name) {
+                        it.linkedAccount
+                    } else {
+                        ""
+                    }
                 )
             }
         )
@@ -312,13 +358,12 @@ class TransactionRepository(private val database: AppDatabase) {
         transaction: TransactionEntity,
         candidate: InstrumentCandidate
     ) {
+        val existing = database.instrumentDao().getAll()
+            .firstOrNull { it.address == transaction.sourceAddress && it.digits == candidate.digits }
         database.instrumentDao().upsertAll(
             listOf(
-                InstrumentEntity(
-                    address = transaction.sourceAddress,
-                    digits = candidate.digits,
-                    channel = candidate.channel.name
-                )
+                (existing ?: InstrumentEntity(transaction.sourceAddress, candidate.digits, candidate.channel.name))
+                    .copy(channel = candidate.channel.name, ignored = false)
             )
         )
         database.transactionDao().updateInstrument(

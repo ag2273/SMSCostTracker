@@ -123,7 +123,7 @@ fun HomeScreen(
         customEnd = filter.periodEndExclusive.minusDays(1)
     )
     val periodTransactions = remember(state.transactions, rangeFilter) {
-        TransactionFilters.apply(state.transactions, rangeFilter)
+        TransactionFilters.apply(state.transactions, rangeFilter, linkedAccounts = state.linkedAccounts)
     }
     val summary = remember(periodTransactions) {
         SpendingAnalysis.summarize(periodTransactions, topMerchantCount = 4)

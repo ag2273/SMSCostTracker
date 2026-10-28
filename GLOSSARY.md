@@ -77,3 +77,9 @@ Units of a currency per US dollar, for USD, SAR, EGP, EUR and GBP. Rates are dow
 
 ## Rate version
 One exchange rate with the time it took effect. Every download that changes a rate, and every rate the user sets, is a new version; an amount is converted with the version in effect when its Transaction happened, so a change never rewrites earlier Transactions. Rates set by the user are kept by daily downloads.
+
+## Account currency
+The currency a card's or account's amounts are shown in. The user chooses it in Cards & accounts; otherwise it is the currency most of its Transactions use (or, for one with few Transactions, the one its bank mostly uses). A Transaction in another currency is shown converted with the Rate version in effect when it happened, and its stated amount stays visible.
+
+## Linked account
+The account a debit card draws from. A linked debit card uses its account's currency, and filtering by the account includes the card's Transactions. Credit cards are never linked.

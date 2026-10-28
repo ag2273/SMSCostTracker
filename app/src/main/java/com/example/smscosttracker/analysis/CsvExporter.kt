@@ -10,21 +10,23 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 object CsvExporter {
-    const val HEADER = "Date,Time,Merchant,Category,Amount,Currency,Channel,Account,Source"
+    const val HEADER = "Date,Time,Merchant,Category,Amount,Currency,Channel,Account,Source,Original amount,Original currency"
 
     private val DATE = DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.US)
     private val TIME = DateTimeFormatter.ofPattern("HH:mm", Locale.US)
 
+    /** [originals] are the stated amounts of converted transactions; others leave the last columns empty. */
     fun toCsv(
         transactions: List<TransactionEntity>,
-        zone: ZoneId = ZoneId.systemDefault()
+        zone: ZoneId = ZoneId.systemDefault(),
+        originals: Map<Long, OriginalAmount> = emptyMap()
     ): String {
         val rows = transactions
             .sortedWith(
                 compareByDescending<TransactionEntity> { it.occurredAt }
                     .thenByDescending { it.id }
             )
-            .map { row(it, zone) }
+            .map { row(it, zone, originals[it.id]) }
         return (listOf(HEADER) + rows).joinToString("\n")
     }
 
@@ -36,7 +38,7 @@ object CsvExporter {
         return "sms-cost-tracker-${DATE.format(date)}.csv"
     }
 
-    private fun row(transaction: TransactionEntity, zone: ZoneId): String {
+    private fun row(transaction: TransactionEntity, zone: ZoneId, original: OriginalAmount?): String {
         val instant = Instant.ofEpochMilli(transaction.occurredAt).atZone(zone)
         return listOf(
             DATE.format(instant.toLocalDate()),
@@ -47,7 +49,9 @@ object CsvExporter {
             transaction.currency,
             channelLabel(transaction),
             transaction.account,
-            transaction.sourceAddress
+            transaction.sourceAddress,
+            original?.let { BigDecimal.valueOf(it.amountMinor, 2).toPlainString() }.orEmpty(),
+            original?.currency.orEmpty()
         ).joinToString(",") { escape(it) }
     }
 

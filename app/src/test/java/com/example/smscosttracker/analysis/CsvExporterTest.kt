@@ -48,10 +48,18 @@ class CsvExporterTest {
         val csv = CsvExporter.toCsv(listOf(transaction()), zone)
 
         assertEquals(
-            "Date,Time,Merchant,Category,Amount,Currency,Channel,Account,Source\n" +
-                "2026-10-05,14:30,Carrefour,Groceries,1249.00,SAR,Card,SAB 1214,SAB",
+            "Date,Time,Merchant,Category,Amount,Currency,Channel,Account,Source,Original amount,Original currency\n" +
+                "2026-10-05,14:30,Carrefour,Groceries,1249.00,SAR,Card,SAB 1214,SAB,,",
             csv
         )
+    }
+
+    @Test
+    fun `converted rows carry the stated amount and currency`() {
+        val row = transaction(amountMinor = 9_375)
+        val csv = CsvExporter.toCsv(listOf(row), zone, originals = mapOf(row.id to OriginalAmount(2_500, "USD")))
+
+        assertEquals("2026-10-05,14:30,Carrefour,Groceries,93.75,SAR,Card,SAB 1214,SAB,25.00,USD", csv.lines()[1])
     }
 
     @Test

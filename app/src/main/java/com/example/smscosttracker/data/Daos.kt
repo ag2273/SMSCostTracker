@@ -37,6 +37,9 @@ interface TransactionDao {
     @Query("SELECT * FROM transactions")
     fun getAll(): List<TransactionEntity>
 
+    @Query("SELECT * FROM transactions WHERE id = :id")
+    fun get(id: Long): TransactionEntity?
+
     @Query("UPDATE transactions SET category = :category, categoryConfidence = 1.0 WHERE id = :id")
     fun updateCategory(id: Long, category: String)
 

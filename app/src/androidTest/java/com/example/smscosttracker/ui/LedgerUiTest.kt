@@ -16,7 +16,11 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.example.smscosttracker.analysis.ActivityFilterState
+import com.example.smscosttracker.analysis.CardKind
+import com.example.smscosttracker.analysis.OriginalAmount
 import com.example.smscosttracker.data.AppDatabase
+import com.example.smscosttracker.data.InstrumentEntity
+import com.example.smscosttracker.data.TransactionChannel
 import com.example.smscosttracker.data.ExchangeRateRepository
 import com.example.smscosttracker.data.OnboardingPreferences
 import com.example.smscosttracker.data.RawSmsEntity
@@ -351,5 +355,41 @@ class LedgerUiTest {
         waitForText("3.7500")
         compose.onNodeWithText("EGP").assertExists()
         compose.onNodeWithText("Update from internet").performScrollTo().assertExists()
+    }
+
+    @Test
+    fun linkedDebitCardShowsAmountsInItsAccountCurrency() {
+        database.instrumentDao().upsertAll(
+            listOf(
+                InstrumentEntity("SAB", "001", TransactionChannel.ACCOUNT.name, currency = "EGP"),
+                InstrumentEntity(
+                    "SAB",
+                    "1214",
+                    TransactionChannel.CARD.name,
+                    cardKind = CardKind.DEBIT.name,
+                    linkedAccount = "SAB 001"
+                )
+            )
+        )
+        val id = database.transactionDao().insert(
+            TransactionEntity(
+                amountMinor = 1_000,
+                currency = "USD",
+                merchant = "Steam",
+                occurredAt = now,
+                sourceAddress = "SAB",
+                category = "Entertainment",
+                account = "SAB 1214",
+                channel = TransactionChannel.CARD.name
+            )
+        )
+
+        val shown = repository.shownTransactions()
+
+        val row = shown.transactions.single { it.id == id }
+        assertEquals("EGP", row.currency)
+        assertEquals(OriginalAmount(1_000, "USD"), shown.originals[id])
+        assertEquals(mapOf("SAB 1214" to "SAB 001"), shown.linkedAccounts)
+        assertEquals("USD", repository.storedTransaction(id)!!.currency)
     }
 }

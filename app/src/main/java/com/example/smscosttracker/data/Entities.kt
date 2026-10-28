@@ -60,7 +60,13 @@ data class InstrumentEntity(
     val digits: String,
     val channel: String,
     val label: String = "",
-    val ignored: Boolean = false
+    val ignored: Boolean = false,
+    /** The user's chosen currency; empty means the one most of its transactions use. */
+    val currency: String = "",
+    /** For cards: DEBIT or CREDIT, empty when not set. */
+    val cardKind: String = "",
+    /** For debit cards: the Account label ("SAB 001") of the account it draws from. */
+    val linkedAccount: String = ""
 )
 
 /** The user's answer about a detected recurring series, kept by series key so re-parses keep it. */
