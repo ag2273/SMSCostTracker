@@ -59,6 +59,13 @@ object AccountCurrencies {
             .sortedWith(compareByDescending<Map.Entry<String, Int>> { it.value }.thenBy { it.key })
             .first().let { it.key to it.value }
 
+    /** Currencies of [transactions], the most used first, so screens open on the main one. */
+    fun byUse(transactions: List<TransactionEntity>): List<String> =
+        transactions.map { it.currency }.filter { it.isNotBlank() }
+            .groupingBy { it }.eachCount().entries
+            .sortedWith(compareByDescending<Map.Entry<String, Int>> { it.value }.thenBy { it.key })
+            .map { it.key }
+
     /** Only debit cards link, and only to an account that is not the card itself. */
     fun linkedAccount(profile: InstrumentProfile?, profiles: Map<String, InstrumentProfile>): String? {
         if (profile == null || profile.channel != TransactionChannel.CARD || profile.cardKind != CardKind.DEBIT) return null

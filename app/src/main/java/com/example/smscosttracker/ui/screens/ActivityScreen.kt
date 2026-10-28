@@ -35,6 +35,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.example.smscosttracker.analysis.AccountCurrencies
 import com.example.smscosttracker.analysis.ActivityFilterState
 import com.example.smscosttracker.analysis.DatePreset
 import com.example.smscosttracker.analysis.TransactionFilterState
@@ -86,7 +87,7 @@ fun ActivityScreen(
         Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
     }
     val currencies = remember(state.transactions) {
-        state.transactions.map { it.currency }.filter { it.isNotBlank() }.distinct().sorted()
+        AccountCurrencies.byUse(state.transactions)
     }
     val accounts = remember(state.transactions) {
         state.transactions.map { it.account }.filter { it.isNotBlank() }.distinct().sorted()

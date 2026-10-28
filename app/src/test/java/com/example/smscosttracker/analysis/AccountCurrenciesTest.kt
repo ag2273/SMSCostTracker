@@ -105,10 +105,21 @@ class AccountCurrenciesTest {
 
     @Test
     fun `amounts without a rate stay as they were`() {
-        val kwd = transaction("NBK 4410", 1_000, "KWD")
-        val shown = AccountCurrencies.convert(listOf(kwd), emptyList(), converter, displayCurrency = "SAR")
+        val qar = transaction("QNB 4410", 1_000, "QAR")
+        val shown = AccountCurrencies.convert(listOf(qar), emptyList(), converter, displayCurrency = "SAR")
 
-        assertEquals(kwd, shown.transactions.single())
+        assertEquals(qar, shown.transactions.single())
         assertTrue(shown.originals.isEmpty())
+    }
+
+    @Test
+    fun `currencies are listed most used first`() {
+        val rows = listOf(
+            transaction("NBK 4410", 1_000, "KWD"),
+            transaction("SAB 1214", 1_000, "SAR"),
+            transaction("SAB 1214", 2_000, "SAR"),
+            transaction("CIB 7781", 3_000, "EGP")
+        )
+        assertEquals(listOf("SAR", "EGP", "KWD"), AccountCurrencies.byUse(rows))
     }
 }

@@ -21,6 +21,7 @@ import com.example.smscosttracker.analysis.OriginalAmount
 import com.example.smscosttracker.data.AppDatabase
 import com.example.smscosttracker.data.InstrumentEntity
 import com.example.smscosttracker.data.TransactionChannel
+import com.example.smscosttracker.data.ExchangeRateEntity
 import com.example.smscosttracker.data.ExchangeRateRepository
 import com.example.smscosttracker.data.RawSmsEntity
 import com.example.smscosttracker.data.TransactionEntity
@@ -416,5 +417,16 @@ class LedgerUiTest {
         // SAR 100.00 at the built-in 3.75 per USD.
         waitForText("USD 26.67")
         assertTrue(compose.onAllNodes(hasText("SAR 100.00")).fetchSemanticsNodes().isEmpty())
+    }
+
+    @Test
+    fun builtInRatesAddedByAnUpdateJoinStoredOnes() {
+        // An install from before KWD had a rate.
+        database.exchangeRateDao().insertAll(listOf(ExchangeRateEntity(currency = "SAR", unitsPerUsd = 3.75, effectiveFrom = 0, source = "BUILT_IN")))
+
+        val converter = ExchangeRateRepository(database).converter()
+
+        assertEquals(1_221L, converter.convert(100, "KWD", "SAR", at = now))
+        assertTrue(database.exchangeRateDao().getAll().any { it.currency == "KWD" })
     }
 }
