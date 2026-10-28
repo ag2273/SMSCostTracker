@@ -9,12 +9,11 @@ import com.example.smscosttracker.analysis.RateVersion
 class ExchangeRateRepository(private val database: AppDatabase) {
     fun versions(): List<RateVersion> {
         val dao = database.exchangeRateDao()
-        val stored = dao.getAll()
-        if (stored.isEmpty()) {
-            dao.insertAll(ExchangeRates.BUILT_IN.map { it.toEntity() })
-            return ExchangeRates.BUILT_IN
-        }
-        return stored.mapNotNull { it.toVersion() }
+        val stored = dao.getAll().mapNotNull { it.toVersion() }
+        // Built-in rates added by an app update join the ones already stored.
+        val missing = ExchangeRates.BUILT_IN.filter { builtIn -> stored.none { it.currency == builtIn.currency } }
+        if (missing.isNotEmpty()) dao.insertAll(missing.map { it.toEntity() })
+        return stored + missing
     }
 
     fun converter(): CurrencyConverter = CurrencyConverter(versions())

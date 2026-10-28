@@ -22,15 +22,25 @@ data class RateVersion(
 )
 
 object ExchangeRates {
-    /** The currencies the app converts between. All use two decimals in minor units. */
-    val SUPPORTED = listOf("USD", "SAR", "EGP", "EUR", "GBP")
+    /** The currencies a card, an account or every screen can be shown in. */
+    val MAIN = listOf("USD", "SAR", "EGP", "EUR", "GBP")
+
+    /**
+     * Every currency with a rate, so purchases in them convert too. Amounts are stored with two
+     * decimals in minor units for all of them, KWD included.
+     */
+    val SUPPORTED = MAIN + listOf("KWD", "AED", "INR", "TRY")
 
     /** Rates that ship with the app, effective from the beginning of time, until the user sets one. */
     val BUILT_IN = listOf(
         RateVersion("SAR", 3.75, 0L, RateSource.BUILT_IN),
         RateVersion("EGP", 48.50, 0L, RateSource.BUILT_IN),
         RateVersion("EUR", 0.92, 0L, RateSource.BUILT_IN),
-        RateVersion("GBP", 0.79, 0L, RateSource.BUILT_IN)
+        RateVersion("GBP", 0.79, 0L, RateSource.BUILT_IN),
+        RateVersion("KWD", 0.307, 0L, RateSource.BUILT_IN),
+        RateVersion("AED", 3.6725, 0L, RateSource.BUILT_IN),
+        RateVersion("INR", 88.0, 0L, RateSource.BUILT_IN),
+        RateVersion("TRY", 42.0, 0L, RateSource.BUILT_IN)
     )
 
     /** Changes smaller than this (0.01%) are not saved as a new version. */

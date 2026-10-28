@@ -33,6 +33,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.example.smscosttracker.analysis.AccountCurrencies
 import com.example.smscosttracker.analysis.CategoryTotal
 import com.example.smscosttracker.analysis.DatePreset
 import com.example.smscosttracker.analysis.SpendingAnalysis
@@ -80,7 +81,7 @@ fun InsightsScreen(
     val state = rememberTransactions(repository, refreshKey)
     val recurring = rememberRecurringSeries(repository, refreshKey)
     val currencies = remember(state.transactions) {
-        state.transactions.map { it.currency }.filter { it.isNotBlank() }.distinct().sorted()
+        AccountCurrencies.byUse(state.transactions)
     }
     var currency by remember(currencies) { mutableStateOf(currencies.firstOrNull() ?: "SAR") }
     val month = YearMonth.now()

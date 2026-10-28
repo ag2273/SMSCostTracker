@@ -329,7 +329,7 @@ fun SettingsScreen(
                             modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
                             verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            (listOf("") + ExchangeRates.SUPPORTED).forEach { code ->
+                            (listOf("") + ExchangeRates.MAIN).forEach { code ->
                                 ChoiceRow(
                                     label = if (code.isBlank()) "Each card's or account's currency" else code,
                                     selected = code == displayCurrency,
@@ -745,7 +745,7 @@ private fun InstrumentSettingCard(
                     val auto = "Auto" + (inferredCurrency?.let { " ($it)" } ?: "")
                     DropdownChip(
                         label = "Currency: " + choice.currency.ifBlank { auto },
-                        options = listOf(auto) + ExchangeRates.SUPPORTED,
+                        options = listOf(auto) + ExchangeRates.MAIN,
                         onSelect = { onChoice(choice.copy(currency = if (it == auto) "" else it)) }
                     )
                 }

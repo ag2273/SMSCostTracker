@@ -47,7 +47,7 @@ class ExchangeRatesTest {
 
     @Test
     fun `a missing rate gives no conversion`() {
-        assertNull(converter.convert(1_000, "KWD", "SAR", at = 0))
+        assertNull(converter.convert(1_000, "QAR", "SAR", at = 0))
         assertNull(CurrencyConverter(emptyList()).convert(1_000, "USD", "SAR", at = 0))
     }
 
@@ -65,5 +65,12 @@ class ExchangeRatesTest {
         assertTrue(ExchangeRates.changed(null, 3.75))
         assertFalse(ExchangeRates.changed(3.75, 3.75001))
         assertTrue(ExchangeRates.changed(48.5, 48.71))
+    }
+
+    @Test
+    fun `every supported currency has a built-in rate`() {
+        assertEquals(ExchangeRates.SUPPORTED.toSet() - "USD", ExchangeRates.BUILT_IN.map { it.currency }.toSet())
+        // KWD 1.000 at 0.307 per USD is about SAR 12.21.
+        assertEquals(1_221L, converter.convert(100, "KWD", "SAR", at = 0))
     }
 }

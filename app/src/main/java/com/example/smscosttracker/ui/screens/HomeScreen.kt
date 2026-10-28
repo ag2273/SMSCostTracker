@@ -39,6 +39,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.example.smscosttracker.analysis.AccountCurrencies
 import com.example.smscosttracker.analysis.DatePreset
 import com.example.smscosttracker.analysis.HomeFilterState
 import com.example.smscosttracker.analysis.HomePeriodUnit
@@ -95,7 +96,7 @@ fun HomeScreen(
         state.transactions.count { TransactionReview.needsReview(it, pendingKeys) }
     }
     val currencies = remember(state.transactions) {
-        state.transactions.map { it.currency }.filter { it.isNotBlank() }.distinct().sorted()
+        AccountCurrencies.byUse(state.transactions)
     }
     val accounts = remember(state.transactions) {
         state.transactions.map { it.account }.filter { it.isNotBlank() }.distinct().sorted()
