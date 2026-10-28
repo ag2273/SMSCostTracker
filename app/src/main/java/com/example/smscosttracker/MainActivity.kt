@@ -43,11 +43,13 @@ import com.example.smscosttracker.data.OnboardingPreferences
 import com.example.smscosttracker.data.TransactionImporter
 import com.example.smscosttracker.data.TransactionRepository
 import com.example.smscosttracker.parsing.TransactionParser
+import com.example.smscosttracker.rates.ExchangeRateSync
 import com.example.smscosttracker.sms.SmsSync
 import com.example.smscosttracker.ui.CrashReportScreen
 import com.example.smscosttracker.ui.components.LedgerBottomBar
 import com.example.smscosttracker.ui.onboarding.OnboardingFlow
 import com.example.smscosttracker.ui.screens.ActivityScreen
+import com.example.smscosttracker.ui.screens.ExchangeRatesScreen
 import com.example.smscosttracker.ui.screens.ExportScreen
 import com.example.smscosttracker.ui.screens.HomeScreen
 import com.example.smscosttracker.ui.screens.InsightsScreen
@@ -136,6 +138,7 @@ class MainActivity : ComponentActivity() {
                 LaunchedEffect(Unit) {
                     if (preferences.autoSync) SmsSync.schedule(context)
                     SubscriptionAlerts.schedule(context)
+                    ExchangeRateSync.schedule(context)
                     val needsRebuild = preferences.complete &&
                         preferences.parserVersion < TransactionParser.PARSER_VERSION
                     if (needsRebuild) {
@@ -307,6 +310,7 @@ private fun MainShell(
                         onOpenUnparsed = { settingsRoute = SettingsRoute.UNPARSED },
                         onOpenReimport = { settingsRoute = SettingsRoute.REIMPORT },
                         onOpenExport = { settingsRoute = SettingsRoute.EXPORT },
+                        onOpenRates = { settingsRoute = SettingsRoute.RATES },
                         onRestartOnboarding = onRestartOnboarding
                     )
                     SettingsRoute.INSTRUMENTS -> InstrumentsScreen(
@@ -333,6 +337,10 @@ private fun MainShell(
                             onDataChanged()
                             settingsRoute = SettingsRoute.OVERVIEW
                         }
+                    )
+                    SettingsRoute.RATES -> ExchangeRatesScreen(
+                        preferences = preferences,
+                        onBack = { settingsRoute = SettingsRoute.OVERVIEW }
                     )
                     SettingsRoute.EXPORT -> ExportScreen(
                         repository = repository,

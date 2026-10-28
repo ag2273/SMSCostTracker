@@ -15,9 +15,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         InstrumentEntity::class,
         MessageLabelEntity::class,
         MerchantAliasEntity::class,
-        RecurringOverrideEntity::class
+        RecurringOverrideEntity::class,
+        ExchangeRateEntity::class
     ],
-    version = 12,
+    version = 13,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -28,6 +29,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun messageLabelDao(): MessageLabelDao
     abstract fun merchantAliasDao(): MerchantAliasDao
     abstract fun recurringOverrideDao(): RecurringOverrideDao
+    abstract fun exchangeRateDao(): ExchangeRateDao
 
     companion object {
         @Volatile
@@ -137,6 +139,16 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_12_13 = object : Migration(12, 13) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `exchange_rates` " +
+                        "(`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `currency` TEXT NOT NULL, " +
+                        "`unitsPerUsd` REAL NOT NULL, `effectiveFrom` INTEGER NOT NULL, `source` TEXT NOT NULL)"
+                )
+            }
+        }
+
         fun get(context: Context): AppDatabase =
             instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
@@ -154,7 +166,8 @@ abstract class AppDatabase : RoomDatabase() {
                     MIGRATION_8_9,
                     MIGRATION_9_10,
                     MIGRATION_10_11,
-                    MIGRATION_11_12
+                    MIGRATION_11_12,
+                    MIGRATION_12_13
                 ).build().also { instance = it }
             }
     }

@@ -126,6 +126,15 @@ interface RecurringOverrideDao {
 }
 
 @Dao
+interface ExchangeRateDao {
+    @Insert
+    fun insertAll(rates: List<ExchangeRateEntity>)
+
+    @Query("SELECT * FROM exchange_rates ORDER BY effectiveFrom, id")
+    fun getAll(): List<ExchangeRateEntity>
+}
+
+@Dao
 interface InstrumentDao {
     @Insert(onConflict = androidx.room.OnConflictStrategy.REPLACE)
     fun upsertAll(instruments: List<InstrumentEntity>)

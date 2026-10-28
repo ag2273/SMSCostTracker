@@ -71,3 +71,9 @@ The UI name for a Recurring series. The Subscriptions screen totals current seri
 
 ## Alert
 A local notification about a confirmed Subscription: Late (no payment 3 days after the expected date), Price changed (a fixed-amount series charged more than 5% above or below its earlier price) or Due tomorrow. Each event alerts once. Alerts are off until the user turns them on in Settings, and are checked after each Sync and once a day.
+
+## Exchange rate
+Units of a currency per US dollar, for USD, SAR, EGP, EUR and GBP. Rates are downloaded from a public source or set by the user in Settings, and convert amounts through USD.
+
+## Rate version
+One exchange rate with the time it took effect. Every download that changes a rate, and every rate the user sets, is a new version; an amount is converted with the version in effect when its Transaction happened, so a change never rewrites earlier Transactions. Rates set by the user are kept by daily downloads.

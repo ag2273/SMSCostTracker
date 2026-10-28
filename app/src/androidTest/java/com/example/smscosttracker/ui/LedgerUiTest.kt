@@ -17,6 +17,8 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.example.smscosttracker.analysis.ActivityFilterState
 import com.example.smscosttracker.data.AppDatabase
+import com.example.smscosttracker.data.ExchangeRateRepository
+import com.example.smscosttracker.data.OnboardingPreferences
 import com.example.smscosttracker.data.RawSmsEntity
 import com.example.smscosttracker.data.TransactionEntity
 import com.example.smscosttracker.data.TransactionImporter
@@ -24,6 +26,7 @@ import com.example.smscosttracker.data.TransactionRepository
 import com.example.smscosttracker.classification.MerchantNames
 import com.example.smscosttracker.ml.MessageType
 import com.example.smscosttracker.ui.screens.ActivityScreen
+import com.example.smscosttracker.ui.screens.ExchangeRatesScreen
 import com.example.smscosttracker.ui.screens.SubscriptionsScreen
 import com.example.smscosttracker.ui.sheets.MessageLabelSheet
 import com.example.smscosttracker.ui.sheets.TransactionDetailSheet
@@ -319,5 +322,34 @@ class LedgerUiTest {
         val series = repository.recurringSeries().single()
         assertEquals("Zain", series.merchant)
         assertTrue(series.confirmed)
+    }
+
+    @Test
+    fun rateChangesApplyOnlyFromThenOn() {
+        val rates = ExchangeRateRepository(database)
+        val before = rates.converter().convert(10_000, "USD", "EGP", at = now)
+
+        assertTrue(rates.setManual("EGP", 50.0, now = now + 1_000))
+
+        val converter = rates.converter()
+        assertEquals(before, converter.convert(10_000, "USD", "EGP", at = now))
+        assertEquals(500_000L, converter.convert(10_000, "USD", "EGP", at = now + 2_000))
+        assertTrue(rates.versions().size > 4)
+    }
+
+    @Test
+    fun exchangeRatesScreenListsTheRates() {
+        compose.setContent {
+            SmsCostTrackerTheme {
+                ExchangeRatesScreen(
+                    preferences = OnboardingPreferences(ApplicationProvider.getApplicationContext()),
+                    onBack = {}
+                )
+            }
+        }
+
+        waitForText("3.7500")
+        compose.onNodeWithText("EGP").assertExists()
+        compose.onNodeWithText("Update from internet").performScrollTo().assertExists()
     }
 }
