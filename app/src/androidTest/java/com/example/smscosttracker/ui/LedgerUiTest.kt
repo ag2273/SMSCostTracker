@@ -10,6 +10,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
@@ -23,6 +24,7 @@ import com.example.smscosttracker.data.TransactionRepository
 import com.example.smscosttracker.classification.MerchantNames
 import com.example.smscosttracker.ml.MessageType
 import com.example.smscosttracker.ui.screens.ActivityScreen
+import com.example.smscosttracker.ui.screens.SubscriptionsScreen
 import com.example.smscosttracker.ui.sheets.MessageLabelSheet
 import com.example.smscosttracker.ui.sheets.TransactionDetailSheet
 import com.example.smscosttracker.ui.theme.SmsCostTrackerTheme
@@ -33,6 +35,8 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.time.LocalDate
+import java.time.ZoneId
 
 @RunWith(AndroidJUnit4::class)
 class LedgerUiTest {
@@ -67,14 +71,15 @@ class LedgerUiTest {
     private fun storeTransaction(
         merchant: String,
         amountMinor: Long,
-        confidence: Double = 0.9
+        confidence: Double = 0.9,
+        occurredAt: Long = now
     ): TransactionEntity {
         val id = database.transactionDao().insert(
             TransactionEntity(
                 amountMinor = amountMinor,
                 currency = "SAR",
                 merchant = merchant,
-                occurredAt = now,
+                occurredAt = occurredAt,
                 sourceAddress = "SAB",
                 category = "Shopping",
                 categoryConfidence = confidence
@@ -210,5 +215,71 @@ class LedgerUiTest {
 
         assertTrue(database.transactionDao().getAll().none { it.merchant.startsWith("STCPAY") })
         assertEquals(2, database.transactionDao().getAll().count { it.merchant == "STC Pay" })
+    }
+
+    private fun storeMonthly(merchant: String, amountMinor: Long, months: Int) {
+        val zone = ZoneId.systemDefault()
+        repeat(months) { back ->
+            val day = LocalDate.now().minusMonths(back.toLong())
+            storeTransaction(merchant, amountMinor, occurredAt = day.atTime(12, 0).atZone(zone).toInstant().toEpochMilli())
+        }
+    }
+
+    private fun showSubscriptions() {
+        compose.setContent {
+            SmsCostTrackerTheme {
+                var refreshKey by remember { mutableStateOf(0) }
+                SubscriptionsScreen(
+                    repository = repository,
+                    refreshKey = refreshKey,
+                    onBack = {},
+                    onChanged = { refreshKey++ }
+                )
+            }
+        }
+    }
+
+    @Test
+    fun subscriptionsShowEmptyStateWhenNothingRepeats() {
+        storeTransaction("Panda", 1_000)
+
+        showSubscriptions()
+
+        waitForText("No subscriptions found yet")
+    }
+
+    @Test
+    fun renamedSubscriptionKeepsItsNewName() {
+        storeMonthly("Fitness Time", 30_000, months = 4)
+        showSubscriptions()
+
+        waitForText("Fitness Time")
+        compose.onNodeWithText("Fitness Time").performClick()
+        compose.onNodeWithText("Rename").performScrollTo().performClick()
+        compose.onNode(hasSetTextAction()).performTextClearance()
+        compose.onNode(hasSetTextAction()).performTextInput("Gym")
+        compose.onNodeWithText("Save name").performScrollTo().performClick()
+
+        compose.waitUntil(timeoutMillis = 10_000) {
+            repository.recurringSeries().singleOrNull()?.merchant == "Gym"
+        }
+        val series = repository.recurringSeries().single()
+        assertEquals("Gym", series.merchant)
+        assertTrue(series.confirmed)
+    }
+
+    @Test
+    fun dismissedSubscriptionStaysDismissed() {
+        storeMonthly("Netflix", 4_900, months = 4)
+        showSubscriptions()
+
+        waitForText("Netflix")
+        compose.onNodeWithText("Netflix").performClick()
+        compose.onNodeWithText("Dismiss").performScrollTo().performClick()
+
+        waitForText("No subscriptions found yet")
+        TransactionImporter(database).rebuildFromStored()
+        storeMonthly("Netflix", 4_900, months = 4)
+        assertTrue(repository.recurringSeries().isEmpty())
     }
 }

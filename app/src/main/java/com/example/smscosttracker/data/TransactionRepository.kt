@@ -160,8 +160,8 @@ class TransactionRepository(private val database: AppDatabase) {
         return TransactionImporter(database).rebuildFromStored()
     }
 
-    fun recurringSeries(): List<RecurringSeries> =
-        RecurringPayments.detect(transactions(), database.recurringOverrideDao().getAll())
+    fun recurringSeries(transactions: List<TransactionEntity> = transactions()): List<RecurringSeries> =
+        RecurringPayments.detect(transactions, database.recurringOverrideDao().getAll())
 
     fun confirmRecurring(series: RecurringSeries) {
         val name = database.recurringOverrideDao().get(series.key)?.name

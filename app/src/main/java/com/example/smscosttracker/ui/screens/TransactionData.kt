@@ -8,6 +8,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import com.example.smscosttracker.analysis.RecurringSeries
 import com.example.smscosttracker.data.TransactionEntity
 import com.example.smscosttracker.data.TransactionRepository
 import kotlin.concurrent.thread
@@ -65,4 +66,29 @@ fun rememberPendingCount(
         }
     }
     return pending
+}
+
+data class RecurringState(
+    val series: List<RecurringSeries>,
+    val transactionsById: Map<Long, TransactionEntity>,
+    val loading: Boolean
+)
+
+@Composable
+fun rememberRecurringSeries(
+    repository: TransactionRepository,
+    refreshKey: Int
+): RecurringState {
+    var state by remember { mutableStateOf(RecurringState(emptyList(), emptyMap(), loading = true)) }
+    LaunchedEffect(refreshKey) {
+        thread {
+            val transactions = repository.transactions()
+            val series = repository.recurringSeries(transactions)
+            val byId = transactions.associateBy { it.id }
+            Handler(Looper.getMainLooper()).post {
+                state = RecurringState(series, byId, loading = false)
+            }
+        }
+    }
+    return state
 }

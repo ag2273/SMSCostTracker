@@ -65,3 +65,6 @@ How often a Recurring series repeats: weekly, monthly (±3 days), quarterly or y
 
 ## Recurring override
 The user's answer about a Recurring series: confirmed (optionally renamed) or dismissed. It is kept by series key (Merchant key, currency and, when split, Account) so a dismissed series is not suggested again after a re-parse.
+
+## Subscription
+The UI name for a Recurring series. The Subscriptions screen totals current series per currency as a monthly equivalent (yearly ÷ 12, quarterly ÷ 3, weekly × 52 ÷ 12) and marks each one Active, Late, Ended or Price changed.

@@ -732,4 +732,67 @@ body = f'''
 </div>'''
 make("16-export", body)
 
+
+# 17 Subscriptions
+def sub_row(merchant, cycle, amount, sub_amount, next_date, pill, pill_cls, color, initial):
+    return f"""<div class="row">
+      <div class="avatar-sm" style="background:color-mix(in srgb, {color} 16%, var(--surface));color:{color}">{initial}</div>
+      <div class="grow"><div class="name">{merchant}</div><div class="desc">{cycle} · next {next_date} <span class="pill {pill_cls}" style="padding:2px 6px;font-size:8px">{pill}</span></div></div>
+      <div class="amt">{amount}<small>{sub_amount}</small></div>
+    </div>"""
+
+body = f"""
+<div class="content">
+  {hdr("Subscriptions", "Payments that repeat, found in your SMS")}
+  <div style="background:var(--primary);color:var(--on-primary);border-radius:22px;padding:15px 18px 13px">
+    <div style="font-size:9px;letter-spacing:1.2px;font-weight:700;opacity:.78;text-transform:uppercase">Every month</div>
+    <div style="font-size:30px;font-weight:700;letter-spacing:-.7px;margin-top:2px">SAR 412.00</div>
+    <div style="font-size:10px;opacity:.78;margin-top:2px">7 active · 2 due this week · yearly payments counted per month</div>
+    <div style="display:flex;margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,.22)">
+      <div style="flex:1"><div style="font-size:9px;opacity:.72">EGP</div><div style="font-size:13px;font-weight:700;margin-top:2px">EGP 650.00 / month</div></div>
+      <div style="flex:1;border-left:1px solid rgba(255,255,255,.22);padding-left:14px"><div style="font-size:9px;opacity:.72">USD</div><div style="font-size:13px;font-weight:700;margin-top:2px">USD 15.49 / month</div></div>
+    </div>
+  </div>
+  <div class="section-row"><div class="section">Active</div><div class="meta">Sorted by next payment</div></div>
+  <div class="list">
+    {sub_row("Netflix", "Monthly", "SAR 59.00", "was SAR 49.00", "Oct 30", "Price changed", "accent", "var(--c1)", "N")}
+    {sub_row("STC Bill", "Monthly", "≈ SAR 230.00", "SAR 180–290", "Nov 2", "Active", "success", "var(--c2)", "S")}
+    {sub_row("Fitness Time", "Yearly", "SAR 2,400.00", "SAR 200.00 / month", "Mar 12", "Active", "success", "var(--c3)", "F")}
+    {sub_row("Shahid VIP", "Monthly", "SAR 25.00", "last Sep 5", "Oct 5", "Late", "danger", "var(--c4)", "S")}
+  </div>
+  <div class="section-row"><div class="section">Ended</div><div class="meta">2</div></div>
+  <div class="list">
+    {sub_row("Anghami Plus", "Monthly", "SAR 21.99", "last Jun 18", "—", "Ended", "", "var(--c5)", "A")}
+  </div>
+  <div class="notice"><div class="ni">{ICONS['info']}</div><div><div class="nt">Not a subscription?</div><div class="ns">Open it and choose Dismiss. It won't be suggested again.</div></div></div>
+</div>
+{bottom_nav("home")}"""
+make("17-subscriptions", body)
+
+# 18 Subscription detail
+detail = f"""<div class="sheet" style="top:120px">
+  <div class="grabber"></div>
+  <div class="sheethead"><div><h2>Netflix</h2><div class="sub">Monthly · Card SAB 1214</div></div><div class="close">{ICONS['close']}</div></div>
+  <div class="card pad">
+    <div class="kv">
+      <div><div class="k">Typical amount</div><div class="v">SAR 59.00</div></div>
+      <div><div class="k">Next payment</div><div class="v">30 Oct 2026</div></div>
+      <div><div class="k">Status</div><div class="v"><span class="pill accent">Price changed</span></div></div>
+      <div><div class="k">Since</div><div class="v">Jan 2026 · 10 payments</div></div>
+    </div>
+  </div>
+  <div class="notice" style="margin-top:10px"><div class="ni">{ICONS['warning']}</div><div><div class="nt">Price went up from SAR 49.00 to SAR 59.00</div><div class="ns">First charged on 30 Sep 2026.</div></div></div>
+  <div class="section-row" style="margin-top:12px"><div class="section">Past payments</div><div class="meta">10</div></div>
+  <div class="list" style="margin-top:8px">
+    <div class="row"><div class="grow"><div class="name">30 Sep 2026</div></div><div class="amt">SAR 59.00</div></div>
+    <div class="row"><div class="grow"><div class="name">30 Aug 2026</div></div><div class="amt">SAR 49.00</div></div>
+    <div class="row"><div class="grow"><div class="name">31 Jul 2026</div></div><div class="amt">SAR 49.00</div></div>
+  </div>
+  <div class="spacer"></div>
+  {button("Confirm subscription")}
+  <div style="display:flex;gap:8px;margin-top:8px"><div class="btn ghost" style="flex:1;height:40px;font-size:11.5px">Rename</div><div class="btn danger" style="flex:1;height:40px;font-size:11.5px">Dismiss</div></div>
+</div>"""
+body = f'<div class="sheetwrap"><div class="backdrop"></div>{detail}</div>'
+make("18-subscription-detail", body)
+
 print("generated", len(list(OUT.glob('*.html'))), "screens")
