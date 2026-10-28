@@ -1,5 +1,6 @@
 package com.example.smscosttracker
 
+import android.content.Intent
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -33,6 +34,7 @@ import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.ui.unit.dp
+import com.example.smscosttracker.alerts.SubscriptionAlerts
 import com.example.smscosttracker.analysis.ActivityFilterState
 import com.example.smscosttracker.analysis.DatePreset
 import com.example.smscosttracker.analysis.HomeFilterState
@@ -62,8 +64,20 @@ import kotlinx.coroutines.withContext
 import kotlin.concurrent.thread
 
 class MainActivity : ComponentActivity() {
+    /** Set when a subscription alert is tapped; the shell opens that series and clears it. */
+    private val openSeriesKey = mutableStateOf<String?>(null)
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        intent.getStringExtra(SubscriptionAlerts.EXTRA_SERIES_KEY)?.let { openSeriesKey.value = it }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (savedInstanceState == null) {
+            openSeriesKey.value = intent?.getStringExtra(SubscriptionAlerts.EXTRA_SERIES_KEY)
+        }
         val crashFile = File(filesDir, "last_crash.txt")
         val lastUpdate = runCatching {
             packageManager.getPackageInfo(packageName, 0).lastUpdateTime
@@ -121,6 +135,7 @@ class MainActivity : ComponentActivity() {
 
                 LaunchedEffect(Unit) {
                     if (preferences.autoSync) SmsSync.schedule(context)
+                    SubscriptionAlerts.schedule(context)
                     val needsRebuild = preferences.complete &&
                         preferences.parserVersion < TransactionParser.PARSER_VERSION
                     if (needsRebuild) {
@@ -152,6 +167,8 @@ class MainActivity : ComponentActivity() {
                         importer = importer,
                         preferences = preferences,
                         refreshKey = refreshKey,
+                        openSeriesKey = openSeriesKey.value,
+                        onSeriesOpened = { openSeriesKey.value = null },
                         onDataChanged = { refreshKey++ },
                         onRestartOnboarding = {
                             preferences.reset()
@@ -185,6 +202,8 @@ private fun MainShell(
     importer: TransactionImporter,
     preferences: OnboardingPreferences,
     refreshKey: Int,
+    openSeriesKey: String?,
+    onSeriesOpened: () -> Unit,
     onDataChanged: () -> Unit,
     onRestartOnboarding: () -> Unit
 ) {
@@ -193,6 +212,15 @@ private fun MainShell(
     var homeFilter by remember { mutableStateOf(HomeFilterState()) }
     var activityFilters by remember { mutableStateOf(ActivityFilterState()) }
     var showSubscriptions by remember { mutableStateOf(false) }
+    var subscriptionsSeriesKey by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(openSeriesKey) {
+        if (openSeriesKey != null) {
+            subscriptionsSeriesKey = openSeriesKey
+            showSubscriptions = true
+            onSeriesOpened()
+        }
+    }
 
     BackHandler(enabled = tab == 3 && settingsRoute != SettingsRoute.OVERVIEW) {
         settingsRoute = SettingsRoute.OVERVIEW
@@ -208,6 +236,7 @@ private fun MainShell(
                 onSelect = { index ->
                     tab = index
                     showSubscriptions = false
+                    subscriptionsSeriesKey = null
                     if (index == 3) settingsRoute = SettingsRoute.OVERVIEW
                 }
             )
@@ -218,7 +247,11 @@ private fun MainShell(
                 SubscriptionsScreen(
                     repository = repository,
                     refreshKey = refreshKey,
-                    onBack = { showSubscriptions = false },
+                    initialSeriesKey = subscriptionsSeriesKey,
+                    onBack = {
+                        showSubscriptions = false
+                        subscriptionsSeriesKey = null
+                    },
                     onChanged = onDataChanged
                 )
             } else when (tab) {
@@ -241,7 +274,10 @@ private fun MainShell(
                         )
                         tab = 1
                     },
-                    onOpenSubscriptions = { showSubscriptions = true },
+                    onOpenSubscriptions = {
+                        subscriptionsSeriesKey = null
+                        showSubscriptions = true
+                    },
                     onImport = {
                         tab = 3
                         settingsRoute = SettingsRoute.REIMPORT
@@ -257,7 +293,10 @@ private fun MainShell(
                 2 -> InsightsScreen(
                     repository = repository,
                     refreshKey = refreshKey,
-                    onOpenSubscriptions = { showSubscriptions = true }
+                    onOpenSubscriptions = {
+                        subscriptionsSeriesKey = null
+                        showSubscriptions = true
+                    }
                 )
                 3 -> when (settingsRoute) {
                     SettingsRoute.OVERVIEW -> SettingsScreen(

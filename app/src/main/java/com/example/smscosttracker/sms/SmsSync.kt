@@ -9,6 +9,7 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.Worker
 import androidx.work.WorkerParameters
+import com.example.smscosttracker.alerts.SubscriptionAlerts
 import com.example.smscosttracker.data.AppDatabase
 import com.example.smscosttracker.data.ImportResult
 import com.example.smscosttracker.data.OnboardingPreferences
@@ -37,6 +38,7 @@ object SmsSync {
         val result = TransactionImporter(database)
             .import(SmsReader.readMessagesSince(context, threads, since))
         preferences.lastSyncedAt = System.currentTimeMillis()
+        runCatching { SubscriptionAlerts.check(context) }
         return result
     }
 

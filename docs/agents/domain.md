@@ -4,7 +4,7 @@ This repository has a single bounded context: turning bank SMS into categorised 
 
 ## Where the domain lives
 
-- `GLOSSARY.md` at the repo root defines the domain terms: Transaction, Amount, Merchant, Category, Classification, Correction, Bank template, Account, Channel, Instrument, Instrument registry, Message type, Message label, Template, Thread selection, Sync, Duplicate, Analysis, Date range, Recurring series, Cycle, Recurring override, Subscription. Use these words in code, issues and UI copy; add a term here before introducing a new concept.
+- `GLOSSARY.md` at the repo root defines the domain terms: Transaction, Amount, Merchant, Category, Classification, Correction, Bank template, Account, Channel, Instrument, Instrument registry, Message type, Message label, Template, Thread selection, Sync, Duplicate, Analysis, Date range, Recurring series, Cycle, Recurring override, Subscription, Alert. Use these words in code, issues and UI copy; add a term here before introducing a new concept.
 - `docs/adr/` records decisions. Read the relevant ADR before changing that area, and add a new numbered ADR when a decision changes. Superseded parts are marked in the newer ADR, not deleted.
   - ADR-0001: on-device ML for classification (pre-trained model part superseded by ADR-0003)
   - ADR-0002: card/account types are learned from the user (instrument registry)
@@ -21,7 +21,8 @@ This repository has a single bounded context: turning bank SMS into categorised 
 | `ml` | Learned reading: tokenizer, templates, message-type classifier (ADR-0003) |
 | `classification` | Category classifier and seed data |
 | `data` | Room entities, DAOs, importer, repository |
-| `analysis` | Filters, aggregation, recurring payments, CSV export |
+| `analysis` | Filters, aggregation, recurring payments, subscription totals and alert rules, CSV export |
+| `alerts` | Local notifications for subscription alerts and their daily check |
 | `ui` | Compose screens, sheets and components |
 
 ## Invariants

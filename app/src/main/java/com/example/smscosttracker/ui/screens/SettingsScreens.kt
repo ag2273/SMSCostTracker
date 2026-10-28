@@ -32,10 +32,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AccountBalance
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.CreditCard
+import androidx.compose.material.icons.outlined.Event
 import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.PriceChange
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Storage
 import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material.icons.outlined.WarningAmber
@@ -65,6 +68,10 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import com.example.smscosttracker.alerts.SubscriptionAlerts
+import com.example.smscosttracker.analysis.AlertType
+import com.example.smscosttracker.analysis.RecurringAlerts
+import com.example.smscosttracker.data.AlertPreferences
 import com.example.smscosttracker.data.DetectedInstrument
 import com.example.smscosttracker.data.ImportProgress
 import com.example.smscosttracker.data.ImportResult
@@ -138,6 +145,37 @@ fun SettingsScreen(
     }
     var stats by remember { mutableStateOf(SettingsStats()) }
     var autoSync by remember { mutableStateOf(preferences.autoSync) }
+    val alertPreferences = remember(context) { AlertPreferences(context) }
+    var alertsOn by remember { mutableStateOf(alertPreferences.enabledTypes) }
+    var alertWaitingForPermission by remember { mutableStateOf<AlertType?>(null) }
+    var notificationsBlocked by remember { mutableStateOf(false) }
+
+    fun setAlert(type: AlertType, on: Boolean) {
+        alertPreferences.setEnabled(type, on)
+        alertsOn = alertPreferences.enabledTypes
+        SubscriptionAlerts.schedule(context)
+        if (on) thread { SubscriptionAlerts.check(context) }
+    }
+
+    val notificationPermission = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        val type = alertWaitingForPermission
+        alertWaitingForPermission = null
+        notificationsBlocked = !granted
+        if (granted && type != null) setAlert(type, true)
+    }
+
+    fun toggleAlert(type: AlertType) {
+        when {
+            type in alertsOn -> setAlert(type, false)
+            SubscriptionAlerts.permissionNeeded(context) -> {
+                alertWaitingForPermission = type
+                notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+            else -> setAlert(type, true)
+        }
+    }
     val lastSyncedAt = remember(refreshKey) { preferences.lastSyncedAt }
     val syncFormatter = remember {
         DateTimeFormatter.ofPattern("d MMM · HH:mm", Locale.ENGLISH).withZone(ZoneId.systemDefault())
@@ -219,6 +257,46 @@ fun SettingsScreen(
                     )
                 }
             }
+
+            Spacer(Modifier.height(18.dp))
+            SectionLabel("SUBSCRIPTION ALERTS")
+            LedgerCard {
+                Column {
+                    SelectRow(
+                        label = "Late payments",
+                        value = "When a confirmed subscription is ${RecurringAlerts.LATE_AFTER_DAYS} days overdue",
+                        icon = Icons.Outlined.Schedule,
+                        trailing = if (AlertType.LATE in alertsOn) "On" else "Off",
+                        onClick = { toggleAlert(AlertType.LATE) }
+                    )
+                    LedgerDivider()
+                    SelectRow(
+                        label = "Price changes",
+                        value = "When a confirmed subscription charges a new amount",
+                        icon = Icons.Outlined.PriceChange,
+                        trailing = if (AlertType.PRICE_CHANGED in alertsOn) "On" else "Off",
+                        onClick = { toggleAlert(AlertType.PRICE_CHANGED) }
+                    )
+                    LedgerDivider()
+                    SelectRow(
+                        label = "Due tomorrow",
+                        value = "A reminder the day before a payment",
+                        icon = Icons.Outlined.Event,
+                        trailing = if (AlertType.DUE_SOON in alertsOn) "On" else "Off",
+                        onClick = { toggleAlert(AlertType.DUE_SOON) }
+                    )
+                }
+            }
+            Text(
+                if (notificationsBlocked) {
+                    "Notifications are blocked. Allow them for SMS Cost Tracker in Android settings."
+                } else {
+                    "Only subscriptions you confirmed send alerts. Notifications are created on this phone."
+                },
+                style = MaterialTheme.typography.labelSmall,
+                color = if (notificationsBlocked) Ledger.Danger else Ledger.Muted,
+                modifier = Modifier.padding(top = 6.dp, start = 4.dp, end = 4.dp)
+            )
 
             Spacer(Modifier.height(18.dp))
             SectionLabel("EXPORT")
