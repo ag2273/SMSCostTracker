@@ -218,4 +218,23 @@ class TransactionFiltersTest {
         )
     }
 
+
+    @Test
+    fun `an account also covers the debit cards linked to it`() {
+        val transactions = listOf(
+            transaction(merchant = "Transfer", account = "SAB 001"),
+            transaction(merchant = "Panda", account = "SAB 1214"),
+            transaction(merchant = "Amazon", account = "SAB 5521")
+        )
+
+        val result = TransactionFilters.apply(
+            transactions,
+            TransactionFilterState(account = "SAB 001"),
+            now,
+            zone,
+            linkedAccounts = mapOf("SAB 1214" to "SAB 001")
+        )
+
+        assertEquals(listOf("Transfer", "Panda"), result.map { it.merchant })
+    }
 }

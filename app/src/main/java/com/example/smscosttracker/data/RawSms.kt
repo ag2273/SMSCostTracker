@@ -28,5 +28,11 @@ data class DetectedInstrument(
     val channel: TransactionChannel,
     val messageCount: Int,
     val verified: Boolean,
-    val ignored: Boolean = false
-)
+    val ignored: Boolean = false,
+    val currency: String = "",
+    val cardKind: String = "",
+    val linkedAccount: String = ""
+) {
+    /** The Account label transactions on this instrument carry ("SAB 1214"). */
+    val account: String get() = "$address $digits"
+}

@@ -71,6 +71,9 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.example.smscosttracker.alerts.SubscriptionAlerts
 import com.example.smscosttracker.analysis.AlertType
+import com.example.smscosttracker.analysis.CardKind
+import com.example.smscosttracker.analysis.ExchangeRates
+import com.example.smscosttracker.analysis.OriginalAmount
 import com.example.smscosttracker.analysis.RecurringAlerts
 import com.example.smscosttracker.data.AlertPreferences
 import com.example.smscosttracker.data.DetectedInstrument
@@ -88,6 +91,7 @@ import com.example.smscosttracker.sms.SmsReader
 import com.example.smscosttracker.sms.SmsSync
 import com.example.smscosttracker.sms.SmsThread
 import com.example.smscosttracker.ui.components.ChoiceRow
+import com.example.smscosttracker.ui.components.DropdownChip
 import com.example.smscosttracker.ui.components.EmptyState
 import com.example.smscosttracker.ui.components.IconTile
 import com.example.smscosttracker.ui.components.LedgerCard
@@ -306,7 +310,7 @@ fun SettingsScreen(
             LedgerCard {
                 SelectRow(
                     label = "Exchange rates",
-                    value = "USD, SAR, EGP, EUR and GBP · downloaded or set by you",
+                    value = "USD, SAR, EGP, EUR and GBP · built in, change them any time",
                     icon = Icons.Outlined.CurrencyExchange,
                     onClick = onOpenRates
                 )
@@ -363,8 +367,7 @@ fun SettingsScreen(
                             color = Ledger.Ink
                         )
                         Text(
-                            "SMS is read and parsed locally and never uploaded. The internet is used only to " +
-                                "download public exchange rates; nothing about you is sent.",
+                            "SMS is read and parsed locally. The app has no internet permission and never uploads messages.",
                             style = MaterialTheme.typography.bodySmall,
                             color = Ledger.Muted
                         )
@@ -434,8 +437,14 @@ private fun StatRow(icon: ImageVector, label: String, value: String) {
 
 private data class InstrumentChoice(
     val channel: TransactionChannel,
-    val ignored: Boolean
+    val ignored: Boolean,
+    /** Empty means the currency most of its transactions use. */
+    val currency: String = "",
+    val cardKind: String = "",
+    val linkedAccount: String = ""
 )
+
+private fun DetectedInstrument.choice() = InstrumentChoice(channel, ignored, currency, cardKind, linkedAccount)
 
 @Composable
 fun InstrumentsScreen(
@@ -446,6 +455,7 @@ fun InstrumentsScreen(
     onChanged: () -> Unit
 ) {
     var instruments by remember { mutableStateOf<List<DetectedInstrument>>(emptyList()) }
+    var inferred by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var initial by remember { mutableStateOf<Map<String, InstrumentChoice>>(emptyMap()) }
     var choices by remember { mutableStateOf<Map<String, InstrumentChoice>>(emptyMap()) }
     var loading by remember { mutableStateOf(true) }
@@ -459,14 +469,11 @@ fun InstrumentsScreen(
         loading = true
         thread {
             val loaded = repository.allDetectedInstruments()
-            val mapped = loaded.associate {
-                key(it) to InstrumentChoice(
-                    channel = it.channel,
-                    ignored = it.ignored
-                )
-            }
+            val loadedInferred = repository.inferredCurrencies()
+            val mapped = loaded.associate { key(it) to it.choice() }
             Handler(Looper.getMainLooper()).post {
                 instruments = loaded
+                inferred = loadedInferred
                 initial = mapped
                 choices = mapped
                 loading = false
@@ -507,7 +514,8 @@ fun InstrumentsScreen(
                     )
                 }
                 Text(
-                    "Tap Card, Account or Ignore. Saving rebuilds transactions from stored SMS.",
+                    "Tap Card, Account or Ignore, and choose each one's currency. Link a debit card to the " +
+                        "account it draws from. Saving rebuilds transactions from stored SMS.",
                     style = MaterialTheme.typography.bodySmall,
                     color = Ledger.Muted,
                     modifier = Modifier.padding(top = 12.dp, bottom = 8.dp)
@@ -536,7 +544,12 @@ fun InstrumentsScreen(
                         items(rows, key = { key(it) }) { instrument ->
                             InstrumentSettingCard(
                                 instrument = instrument,
-                                choice = choices[key(instrument)] ?: InstrumentChoice(instrument.channel, instrument.ignored),
+                                choice = choices[key(instrument)] ?: instrument.choice(),
+                                inferredCurrency = inferred[instrument.account],
+                                accounts = instruments.filter {
+                                    val other = choices[key(it)] ?: it.choice()
+                                    !other.ignored && other.channel == TransactionChannel.ACCOUNT
+                                }.map { it.account },
                                 onChoice = { choice ->
                                     choices = choices + (key(instrument) to choice)
                                 }
@@ -574,11 +587,13 @@ fun InstrumentsScreen(
                             saving = true
                             error = null
                             val toSave = instruments.map { instrument ->
-                                val choice = choices[key(instrument)]
-                                    ?: InstrumentChoice(instrument.channel, instrument.ignored)
+                                val choice = choices[key(instrument)] ?: instrument.choice()
                                 instrument.copy(
                                     channel = choice.channel,
-                                    ignored = choice.ignored
+                                    ignored = choice.ignored,
+                                    currency = choice.currency,
+                                    cardKind = choice.cardKind,
+                                    linkedAccount = choice.linkedAccount
                                 )
                             }
                             thread {
@@ -609,6 +624,8 @@ fun InstrumentsScreen(
 private fun InstrumentSettingCard(
     instrument: DetectedInstrument,
     choice: InstrumentChoice,
+    inferredCurrency: String?,
+    accounts: List<String>,
     onChoice: (InstrumentChoice) -> Unit
 ) {
     LedgerCard {
@@ -650,6 +667,52 @@ private fun InstrumentSettingCard(
                     modifier = Modifier.weight(1f)
                 )
             }
+            if (!choice.ignored && choice.channel == TransactionChannel.CARD) {
+                Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                    CardKind.entries.forEach { kind ->
+                        ChoicePill(
+                            label = kind.label,
+                            selected = choice.cardKind == kind.name,
+                            onClick = {
+                                onChoice(
+                                    choice.copy(
+                                        cardKind = kind.name,
+                                        linkedAccount = if (kind == CardKind.DEBIT) choice.linkedAccount else ""
+                                    )
+                                )
+                            },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+            }
+            val linked = choice.linkedAccount.takeIf {
+                !choice.ignored && choice.channel == TransactionChannel.CARD && choice.cardKind == CardKind.DEBIT.name
+            }
+            if (!choice.ignored && choice.channel == TransactionChannel.CARD && choice.cardKind == CardKind.DEBIT.name) {
+                val none = "Not linked"
+                DropdownChip(
+                    label = if (linked.isNullOrBlank()) "Linked account: none" else "Linked account: $linked",
+                    options = listOf(none) + accounts.filter { it != instrument.account },
+                    onSelect = { onChoice(choice.copy(linkedAccount = if (it == none) "" else it)) }
+                )
+            }
+            if (!choice.ignored) {
+                if (!linked.isNullOrBlank()) {
+                    Text(
+                        "Uses $linked's currency.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Ledger.Muted
+                    )
+                } else {
+                    val auto = "Auto" + (inferredCurrency?.let { " ($it)" } ?: "")
+                    DropdownChip(
+                        label = "Currency: " + choice.currency.ifBlank { auto },
+                        options = listOf(auto) + ExchangeRates.SUPPORTED,
+                        onSelect = { onChoice(choice.copy(currency = if (it == auto) "" else it)) }
+                    )
+                }
+            }
         }
     }
 }
@@ -687,6 +750,7 @@ fun ExportScreen(
     onBack: () -> Unit
 ) {
     var transactions by remember { mutableStateOf<List<TransactionEntity>>(emptyList()) }
+    var originals by remember { mutableStateOf<Map<Long, OriginalAmount>>(emptyMap()) }
     var loading by remember { mutableStateOf(true) }
     var status by remember { mutableStateOf<String?>(null) }
     val export = rememberCsvExport { status = it }
@@ -694,9 +758,10 @@ fun ExportScreen(
     LaunchedEffect(refreshKey) {
         loading = true
         thread {
-            val loaded = repository.transactions()
+            val loaded = repository.shownTransactions()
             Handler(Looper.getMainLooper()).post {
-                transactions = loaded
+                transactions = loaded.transactions
+                originals = loaded.originals
                 loading = false
             }
         }
@@ -754,7 +819,7 @@ fun ExportScreen(
                     Spacer(Modifier.height(14.dp))
                     PrimaryButton(
                         text = "Export CSV",
-                        onClick = { export(transactions) },
+                        onClick = { export(transactions, originals) },
                         enabled = !loading && transactions.isNotEmpty()
                     )
                     status?.let {

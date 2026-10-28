@@ -683,7 +683,7 @@ private fun PermissionScreen(
                 PrivacyPoint(
                     Icons.Outlined.Shield,
                     "No internet required",
-                    "Parsing and classification run locally. The internet is used only to download exchange rates."
+                    "Parsing and classification run locally."
                 )
                 PrivacyPoint(
                     Icons.Outlined.Settings,

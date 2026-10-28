@@ -43,7 +43,6 @@ import com.example.smscosttracker.data.OnboardingPreferences
 import com.example.smscosttracker.data.TransactionImporter
 import com.example.smscosttracker.data.TransactionRepository
 import com.example.smscosttracker.parsing.TransactionParser
-import com.example.smscosttracker.rates.ExchangeRateSync
 import com.example.smscosttracker.sms.SmsSync
 import com.example.smscosttracker.ui.CrashReportScreen
 import com.example.smscosttracker.ui.components.LedgerBottomBar
@@ -138,7 +137,6 @@ class MainActivity : ComponentActivity() {
                 LaunchedEffect(Unit) {
                     if (preferences.autoSync) SmsSync.schedule(context)
                     SubscriptionAlerts.schedule(context)
-                    ExchangeRateSync.schedule(context)
                     val needsRebuild = preferences.complete &&
                         preferences.parserVersion < TransactionParser.PARSER_VERSION
                     if (needsRebuild) {
@@ -339,7 +337,6 @@ private fun MainShell(
                         }
                     )
                     SettingsRoute.RATES -> ExchangeRatesScreen(
-                        preferences = preferences,
                         onBack = { settingsRoute = SettingsRoute.OVERVIEW }
                     )
                     SettingsRoute.EXPORT -> ExportScreen(

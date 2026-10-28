@@ -121,13 +121,19 @@ fun ActivityScreen(
     }
 
     val filtered = remember(state.transactions, filter, pendingKeys) {
-        TransactionFilters.apply(state.transactions, filter, pendingInstrumentKeys = pendingKeys)
+        TransactionFilters.apply(
+            state.transactions,
+            filter,
+            pendingInstrumentKeys = pendingKeys,
+            linkedAccounts = state.linkedAccounts
+        )
     }
     val reviewCount = remember(state.transactions, filter, pendingKeys) {
         TransactionFilters.apply(
             state.transactions,
             filter.copy(needsReview = true),
-            pendingInstrumentKeys = pendingKeys
+            pendingInstrumentKeys = pendingKeys,
+            linkedAccounts = state.linkedAccounts
         ).size
     }
     val grouped = remember(filtered) {
@@ -146,7 +152,7 @@ fun ActivityScreen(
                 "Activity",
                 "${filtered.size} transactions · ${TransactionFilters.labelFor(filter)}",
                 trailing = {
-                    IconButton(onClick = { exportCsv(filtered) }) {
+                    IconButton(onClick = { exportCsv(filtered, state.originals) }) {
                         Icon(
                             Icons.Outlined.FileDownload,
                             contentDescription = "Export CSV",
@@ -264,6 +270,7 @@ fun ActivityScreen(
             accounts = accounts,
             currencies = currencies,
             allTransactions = state.transactions,
+            linkedAccounts = state.linkedAccounts,
             onDismiss = { showFilters = false },
             onApply = {
                 updateFilter(it)

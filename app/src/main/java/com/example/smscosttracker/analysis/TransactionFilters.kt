@@ -44,7 +44,8 @@ object TransactionFilters {
         state: TransactionFilterState,
         now: Long = System.currentTimeMillis(),
         zone: ZoneId = ZoneId.systemDefault(),
-        pendingInstrumentKeys: Set<String> = emptySet()
+        pendingInstrumentKeys: Set<String> = emptySet(),
+        linkedAccounts: Map<String, String> = emptyMap()
     ): List<TransactionEntity> {
         val range = rangeFor(state, now, zone)
         return transactions.filter { transaction ->
@@ -52,7 +53,9 @@ object TransactionFilters {
                 (transaction.occurredAt >= range.first && transaction.occurredAt < range.second)
             val inCategory = state.category == null ||
                 Category.fromStorage(transaction.category) == state.category
-            val inAccount = state.account == null || transaction.account == state.account
+            // An account also covers the debit cards linked to it.
+            val inAccount = state.account == null || transaction.account == state.account ||
+                linkedAccounts[transaction.account] == state.account
             val inCurrency = state.currency == null || transaction.currency == state.currency
             val matchesMerchant = state.merchantQuery.isBlank() ||
                 transaction.merchant.contains(state.merchantQuery.trim(), ignoreCase = true)

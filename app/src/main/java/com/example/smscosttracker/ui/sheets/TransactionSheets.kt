@@ -93,11 +93,12 @@ fun FiltersSheet(
     currencies: List<String>,
     allTransactions: List<TransactionEntity>,
     onDismiss: () -> Unit,
-    onApply: (TransactionFilterState) -> Unit
+    onApply: (TransactionFilterState) -> Unit,
+    linkedAccounts: Map<String, String> = emptyMap()
 ) {
     var draft by remember(filter) { mutableStateOf(filter) }
     val previewCount = remember(draft, allTransactions) {
-        TransactionFilters.apply(allTransactions, draft).size
+        TransactionFilters.apply(allTransactions, draft, linkedAccounts = linkedAccounts).size
     }
     val customStart = draft.customStart
     val customEnd = draft.customEnd
@@ -397,11 +398,15 @@ fun TransactionDetailSheet(
     var merging by remember { mutableStateOf(false) }
     var merged by remember { mutableStateOf(false) }
     var subscription by remember { mutableStateOf<RecurringSeries?>(null) }
+    var stored by remember { mutableStateOf<TransactionEntity?>(null) }
     var choosingCycle by remember { mutableStateOf(false) }
     val formatter = remember {
         DateTimeFormatter.ofPattern("d MMM yyyy · HH:mm", Locale.ENGLISH)
             .withZone(ZoneId.systemDefault())
     }
+
+    // The stored transaction when its shown amount was converted to the card's or account's currency.
+    val converted = stored?.takeIf { it.currency != transaction.currency }
 
     LaunchedEffect(transaction.id) {
         thread {
@@ -410,8 +415,10 @@ fun TransactionDetailSheet(
             val loadedLabel = loadedMessages.firstOrNull()?.let { repository.messageLabel(it.id) }
             val loadedMerged = repository.hasMerges(transaction.merchant)
             val loadedSubscription = repository.recurringSeriesFor(transaction)
+            val loadedStored = repository.storedTransaction(transaction.id)
             Handler(Looper.getMainLooper()).post {
                 subscription = loadedSubscription
+                stored = loadedStored
                 messages = loadedMessages
                 candidates = loadedCandidates
                 label = loadedLabel
@@ -497,11 +504,20 @@ fun TransactionDetailSheet(
                         color = Ledger.Muted
                     )
                 }
-                Text(
-                    "-" + formatMoney(transaction.amountMinor, transaction.currency),
-                    style = MaterialTheme.typography.titleLarge,
-                    color = Ledger.Ink
-                )
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        "-" + formatMoney(transaction.amountMinor, transaction.currency),
+                        style = MaterialTheme.typography.titleLarge,
+                        color = Ledger.Ink
+                    )
+                    converted?.let {
+                        Text(
+                            formatMoney(it.amountMinor, it.currency),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Ledger.Muted
+                        )
+                    }
+                }
             }
             Spacer(Modifier.height(14.dp))
             LedgerCard {
@@ -509,7 +525,13 @@ fun TransactionDetailSheet(
                     Text("What we parsed", style = MaterialTheme.typography.titleMedium, color = Ledger.Ink)
                     Spacer(Modifier.height(10.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        ParsedField("AMOUNT", formatMoney(transaction.amountMinor, transaction.currency), Modifier.weight(1f))
+                        ParsedField(
+                            "AMOUNT",
+                            converted?.let {
+                                "${formatMoney(it.amountMinor, it.currency)} → ${formatMoney(transaction.amountMinor, transaction.currency)}"
+                            } ?: formatMoney(transaction.amountMinor, transaction.currency),
+                            Modifier.weight(1f)
+                        )
                         ParsedField("MERCHANT", transaction.merchant, Modifier.weight(1f))
                     }
                     Spacer(Modifier.height(10.dp))

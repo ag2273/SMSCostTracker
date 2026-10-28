@@ -8,14 +8,20 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import com.example.smscosttracker.analysis.OriginalAmount
 import com.example.smscosttracker.analysis.RecurringSeries
+import com.example.smscosttracker.analysis.ShownTransactions
 import com.example.smscosttracker.data.TransactionEntity
 import com.example.smscosttracker.data.TransactionRepository
 import kotlin.concurrent.thread
 
 data class TransactionListState(
     val transactions: List<TransactionEntity>,
-    val loading: Boolean
+    val loading: Boolean,
+    /** Stated amounts of transactions shown converted, by id. */
+    val originals: Map<Long, OriginalAmount> = emptyMap(),
+    /** Each linked debit card's Account label to its account's label. */
+    val linkedAccounts: Map<String, String> = emptyMap()
 )
 
 @Composable
@@ -23,19 +29,19 @@ fun rememberTransactions(
     repository: TransactionRepository,
     refreshKey: Int
 ): TransactionListState {
-    var transactions by remember { mutableStateOf<List<TransactionEntity>>(emptyList()) }
+    var shown by remember { mutableStateOf(ShownTransactions(emptyList(), emptyMap(), emptyMap())) }
     var loading by remember { mutableStateOf(true) }
     LaunchedEffect(refreshKey) {
         loading = true
         thread {
-            val loaded = repository.transactions()
+            val loaded = repository.shownTransactions()
             Handler(Looper.getMainLooper()).post {
-                transactions = loaded
+                shown = loaded
                 loading = false
             }
         }
     }
-    return TransactionListState(transactions, loading)
+    return TransactionListState(shown.transactions, loading, shown.originals, shown.linkedAccounts)
 }
 
 @Composable
