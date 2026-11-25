@@ -2,7 +2,6 @@ package com.example.smscosttracker.analysis
 
 import com.example.smscosttracker.classification.Category
 import com.example.smscosttracker.data.TransactionEntity
-import java.time.Instant
 import java.time.YearMonth
 import java.time.ZoneId
 
@@ -26,11 +25,12 @@ object SpendingAnalysis {
         transactions: List<TransactionEntity>,
         zone: ZoneId = ZoneId.systemDefault(),
         maxMonths: Int = MAX_MONTHS,
-        topMerchantCount: Int = 5
+        topMerchantCount: Int = 5,
+        monthStartDay: Int = 1
     ): List<SpendingSummary> =
         transactions.groupBy { it.currency }
             .map { (_, rows) ->
-                summarize(rows, zone, maxMonths, topMerchantCount)
+                summarize(rows, zone, maxMonths, topMerchantCount, monthStartDay)
             }
             .sortedByDescending { it.totalMinor }
 
@@ -58,10 +58,11 @@ object SpendingAnalysis {
         transactions: List<TransactionEntity>,
         months: Int,
         now: YearMonth = YearMonth.now(),
-        zone: ZoneId = ZoneId.systemDefault()
+        zone: ZoneId = ZoneId.systemDefault(),
+        monthStartDay: Int = 1
     ): List<MonthlyTotal> {
         require(months > 0) { "months must be positive" }
-        val totals = transactions.monthTotals(zone)
+        val totals = transactions.monthTotals(zone, monthStartDay)
         val start = now.minusMonths((months - 1).toLong())
         return generateSequence(start) { it.plusMonths(1) }
             .take(months)
@@ -73,7 +74,8 @@ object SpendingAnalysis {
         transactions: List<TransactionEntity>,
         zone: ZoneId = ZoneId.systemDefault(),
         maxMonths: Int = MAX_MONTHS,
-        topMerchantCount: Int = 5
+        topMerchantCount: Int = 5,
+        monthStartDay: Int = 1
     ): SpendingSummary {
         val byCategory = transactions
             .totalsBy { Category.fromStorage(it.category).displayName }
@@ -91,7 +93,7 @@ object SpendingAnalysis {
             .totalsBy { it.account.ifBlank { "Unknown account" } }
             .map { (account, amount) -> AccountTotal(account, amount) }
 
-        val totals = transactions.monthTotals(zone)
+        val totals = transactions.monthTotals(zone, monthStartDay)
         val latest = totals.keys.maxOrNull()
         val byMonth = if (latest == null) {
             emptyList()
@@ -114,9 +116,12 @@ object SpendingAnalysis {
         )
     }
 
-    private fun List<TransactionEntity>.monthTotals(zone: ZoneId): Map<YearMonth, Long> =
-        groupingBy { YearMonth.from(Instant.ofEpochMilli(it.occurredAt).atZone(zone)) }
+    /** Totals per month, where a month is the user's ([MonthCycle]) when it starts after the 1st. */
+    private fun List<TransactionEntity>.monthTotals(zone: ZoneId, monthStartDay: Int): Map<YearMonth, Long> {
+        val cycle = MonthCycle.of(monthStartDay)
+        return groupingBy { cycle.monthOf(it.occurredAt, zone) }
             .fold(0L) { sum, transaction -> sum + transaction.amountMinor }
+    }
 
     private fun List<TransactionEntity>.totalsBy(
         key: (TransactionEntity) -> String

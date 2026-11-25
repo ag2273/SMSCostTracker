@@ -15,6 +15,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -30,6 +32,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AccountBalance
+import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.CreditCard
 import androidx.compose.material.icons.outlined.CurrencyExchange
@@ -74,6 +77,7 @@ import com.example.smscosttracker.alerts.SubscriptionAlerts
 import com.example.smscosttracker.analysis.AlertType
 import com.example.smscosttracker.analysis.CardKind
 import com.example.smscosttracker.analysis.ExchangeRates
+import com.example.smscosttracker.analysis.MonthCycle
 import com.example.smscosttracker.analysis.OriginalAmount
 import com.example.smscosttracker.analysis.RecurringAlerts
 import com.example.smscosttracker.data.AlertPreferences
@@ -96,6 +100,7 @@ import com.example.smscosttracker.ui.components.DropdownChip
 import com.example.smscosttracker.ui.components.EmptyState
 import com.example.smscosttracker.ui.components.IconTile
 import com.example.smscosttracker.ui.components.LedgerCard
+import com.example.smscosttracker.ui.components.LedgerChip
 import com.example.smscosttracker.ui.components.LedgerDivider
 import com.example.smscosttracker.ui.components.LedgerTextButton
 import com.example.smscosttracker.ui.components.PageHeader
@@ -144,10 +149,13 @@ fun SettingsScreen(
     onOpenExport: () -> Unit,
     onOpenRates: () -> Unit,
     onDisplayCurrencyChanged: () -> Unit,
-    onRestartOnboarding: () -> Unit
+    onRestartOnboarding: () -> Unit,
+    onMonthStartChanged: () -> Unit = onDisplayCurrencyChanged
 ) {
     val context = LocalContext.current
     var displayCurrency by remember { mutableStateOf(preferences.displayCurrency) }
+    var monthStartDay by remember { mutableStateOf(preferences.monthStartDay) }
+    var choosingMonthStart by remember { mutableStateOf(false) }
     var choosingDisplay by remember { mutableStateOf(false) }
     val versionName = remember(context) {
         runCatching {
@@ -306,6 +314,35 @@ fun SettingsScreen(
                 },
                 style = MaterialTheme.typography.labelSmall,
                 color = if (notificationsBlocked) Ledger.Danger else Ledger.Muted,
+                modifier = Modifier.padding(top = 6.dp, start = 4.dp, end = 4.dp)
+            )
+
+            Spacer(Modifier.height(18.dp))
+            SectionLabel("MONTH")
+            LedgerCard {
+                Column {
+                    SelectRow(
+                        label = "Month starts on",
+                        value = monthStartSummary(monthStartDay),
+                        icon = Icons.Outlined.CalendarMonth,
+                        trailing = "Day $monthStartDay",
+                        onClick = { choosingMonthStart = !choosingMonthStart }
+                    )
+                    if (choosingMonthStart) {
+                        MonthStartPicker(selected = monthStartDay) { day ->
+                            monthStartDay = day
+                            preferences.monthStartDay = day
+                            choosingMonthStart = false
+                            onMonthStartChanged()
+                        }
+                    }
+                }
+            }
+            Text(
+                "Home, Activity and Insights count each month from this day, for example from " +
+                    "your salary day.",
+                style = MaterialTheme.typography.labelSmall,
+                color = Ledger.Muted,
                 modifier = Modifier.padding(top = 6.dp, start = 4.dp, end = 4.dp)
             )
 
@@ -1286,3 +1323,28 @@ private fun androidx.compose.foundation.layout.RowScope.ReimportStat(
 private fun hasSmsPermission(context: android.content.Context): Boolean =
     ContextCompat.checkSelfPermission(context, Manifest.permission.READ_SMS) ==
         PackageManager.PERMISSION_GRANTED
+
+private fun ordinal(day: Int): String = day.toString() + when {
+    day % 100 in 11..13 -> "th"
+    day % 10 == 1 -> "st"
+    day % 10 == 2 -> "nd"
+    day % 10 == 3 -> "rd"
+    else -> "th"
+}
+
+private fun monthStartSummary(day: Int): String =
+    if (day == 1) "Calendar months, 1st to the last day" else "${ordinal(day)} to the ${ordinal(day - 1)} of the next month"
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun MonthStartPicker(selected: Int, onSelect: (Int) -> Unit) {
+    FlowRow(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        (1..MonthCycle.MAX_START_DAY).forEach { day ->
+            LedgerChip(text = day.toString(), selected = day == selected, onClick = { onSelect(day) })
+        }
+    }
+}

@@ -62,6 +62,13 @@ class OnboardingPreferences(context: Context) {
             prefs.edit().putString(KEY_DISPLAY_CURRENCY, value).apply()
         }
 
+    /** The day of the month (1–28) the user's month starts on; 1 means calendar months. */
+    var monthStartDay: Int
+        get() = prefs.getInt(KEY_MONTH_START_DAY, 1).coerceIn(1, 28)
+        set(value) {
+            prefs.edit().putInt(KEY_MONTH_START_DAY, value.coerceIn(1, 28)).apply()
+        }
+
     var lastSyncedAt: Long
         get() = prefs.getLong(KEY_LAST_SYNCED, 0L)
         set(value) {
@@ -87,5 +94,6 @@ class OnboardingPreferences(context: Context) {
         const val KEY_AUTO_SYNC = "auto_sync"
         const val KEY_LAST_SYNCED = "last_synced_at"
         const val KEY_DISPLAY_CURRENCY = "display_currency"
+        const val KEY_MONTH_START_DAY = "month_start_day"
     }
 }

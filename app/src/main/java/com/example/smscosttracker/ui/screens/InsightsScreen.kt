@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import com.example.smscosttracker.analysis.AccountCurrencies
 import com.example.smscosttracker.analysis.CategoryTotal
 import com.example.smscosttracker.analysis.DatePreset
+import com.example.smscosttracker.analysis.MonthCycle
 import com.example.smscosttracker.analysis.SpendingAnalysis
 import com.example.smscosttracker.analysis.TransactionFilterState
 import com.example.smscosttracker.analysis.TransactionFilters
@@ -57,7 +58,7 @@ import com.example.smscosttracker.ui.components.formatExpenseMoney
 import com.example.smscosttracker.ui.components.formatMoney
 import com.example.smscosttracker.ui.theme.Ledger
 import com.example.smscosttracker.ui.theme.LedgerChartColors
-import java.time.YearMonth
+import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.roundToInt
@@ -79,28 +80,32 @@ fun InsightsScreen(
     onOpenSubscriptions: () -> Unit
 ) {
     val state = rememberTransactions(repository, refreshKey)
+    val monthStartDay = rememberMonthStartDay(refreshKey)
+    val cycle = MonthCycle.of(monthStartDay)
     val recurring = rememberRecurringSeries(repository, refreshKey)
     val currencies = remember(state.transactions) {
         AccountCurrencies.byUse(state.transactions)
     }
     var currency by remember(currencies) { mutableStateOf(currencies.firstOrNull() ?: "SAR") }
-    val month = YearMonth.now()
+    val month = cycle.monthOf(LocalDate.now())
     val filter = TransactionFilterState(
         preset = DatePreset.THIS_MONTH,
         currency = currency
     )
-    val rows = remember(state.transactions, filter) {
-        TransactionFilters.apply(state.transactions, filter)
+    val rows = remember(state.transactions, filter, monthStartDay) {
+        TransactionFilters.apply(state.transactions, filter, monthStartDay = monthStartDay)
     }
-    val summary = remember(rows) { SpendingAnalysis.summarize(rows, topMerchantCount = 5) }
+    val summary = remember(rows, monthStartDay) {
+        SpendingAnalysis.summarize(rows, topMerchantCount = 5, monthStartDay = monthStartDay)
+    }
     val allTimeRows = remember(state.transactions, currency) {
         TransactionFilters.apply(
             state.transactions,
             TransactionFilterState(preset = DatePreset.ALL, currency = currency)
         )
     }
-    val allTimeSummary = remember(allTimeRows) {
-        SpendingAnalysis.summarize(allTimeRows, topMerchantCount = 5)
+    val allTimeSummary = remember(allTimeRows, monthStartDay) {
+        SpendingAnalysis.summarize(allTimeRows, topMerchantCount = 5, monthStartDay = monthStartDay)
     }
     val showingAllTime = rows.isEmpty()
     val displaySummary = if (showingAllTime) allTimeSummary else summary
@@ -109,12 +114,17 @@ fun InsightsScreen(
         displaySummary.byCategory.sortedByDescending { it.amountMinor }
     }
     val trendAnchor = if (showingAllTime) {
-        allTimeSummary.byMonth.lastOrNull()?.month ?: YearMonth.now()
+        allTimeSummary.byMonth.lastOrNull()?.month ?: month
     } else {
-        YearMonth.now()
+        month
     }
-    val trendMonths = remember(allTimeRows, trendAnchor) {
-        SpendingAnalysis.monthlyTrend(allTimeRows, months = TREND_MONTHS, now = trendAnchor)
+    val trendMonths = remember(allTimeRows, trendAnchor, monthStartDay) {
+        SpendingAnalysis.monthlyTrend(
+            allTimeRows,
+            months = TREND_MONTHS,
+            now = trendAnchor,
+            monthStartDay = monthStartDay
+        )
     }
     val trendLabel = remember(trendMonths) {
         if (trendMonths.isEmpty()) {
@@ -129,7 +139,8 @@ fun InsightsScreen(
     val accounts = displayRows.filter { TransactionChannel.fromStorage(it.channel) == TransactionChannel.ACCOUNT }
         .sumOf { it.amountMinor }
     val merchantMeta = remember(displayRows) { displayRows.merchantMetadata() }
-    val monthLabel = month.format(DateTimeFormatter.ofPattern("MMMM yyyy", Locale.ENGLISH))
+    val monthLabel = month.format(DateTimeFormatter.ofPattern("MMMM yyyy", Locale.ENGLISH)) +
+        (cycle.rangeLabel(month)?.let { " · $it" } ?: "")
     val headerLabel = if (showingAllTime && displayRows.isNotEmpty()) "All time" else monthLabel
 
     ScreenBackground {

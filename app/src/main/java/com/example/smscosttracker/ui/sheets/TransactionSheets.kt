@@ -45,6 +45,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.smscosttracker.analysis.DatePreset
+import com.example.smscosttracker.analysis.MonthCycle
 import com.example.smscosttracker.analysis.RecurringCycle
 import com.example.smscosttracker.analysis.RecurringSeries
 import com.example.smscosttracker.analysis.TransactionFilterState
@@ -94,11 +95,17 @@ fun FiltersSheet(
     allTransactions: List<TransactionEntity>,
     onDismiss: () -> Unit,
     onApply: (TransactionFilterState) -> Unit,
-    linkedAccounts: Map<String, String> = emptyMap()
+    linkedAccounts: Map<String, String> = emptyMap(),
+    monthStartDay: Int = 1
 ) {
     var draft by remember(filter) { mutableStateOf(filter) }
-    val previewCount = remember(draft, allTransactions) {
-        TransactionFilters.apply(allTransactions, draft, linkedAccounts = linkedAccounts).size
+    val previewCount = remember(draft, allTransactions, monthStartDay) {
+        TransactionFilters.apply(
+            allTransactions,
+            draft,
+            linkedAccounts = linkedAccounts,
+            monthStartDay = monthStartDay
+        ).size
     }
     val customStart = draft.customStart
     val customEnd = draft.customEnd
@@ -146,9 +153,10 @@ fun FiltersSheet(
                         onClick = {
                             draft = if (preset == DatePreset.CUSTOM && draft.customStart == null) {
                                 val today = LocalDate.now()
+                                val cycle = MonthCycle.of(monthStartDay)
                                 draft.copy(
                                     preset = preset,
-                                    customStart = today.withDayOfMonth(1),
+                                    customStart = cycle.start(cycle.monthOf(today)),
                                     customEnd = today
                                 )
                             } else {

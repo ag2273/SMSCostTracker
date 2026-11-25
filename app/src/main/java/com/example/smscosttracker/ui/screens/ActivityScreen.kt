@@ -82,6 +82,7 @@ fun ActivityScreen(
     onDataChanged: () -> Unit
 ) {
     val state = rememberTransactions(repository, refreshKey)
+    val monthStartDay = rememberMonthStartDay(refreshKey)
     val context = LocalContext.current
     val exportCsv = rememberCsvExport { message ->
         Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
@@ -121,20 +122,22 @@ fun ActivityScreen(
         }
     }
 
-    val filtered = remember(state.transactions, filter, pendingKeys) {
+    val filtered = remember(state.transactions, filter, pendingKeys, monthStartDay) {
         TransactionFilters.apply(
             state.transactions,
             filter,
             pendingInstrumentKeys = pendingKeys,
-            linkedAccounts = state.linkedAccounts
+            linkedAccounts = state.linkedAccounts,
+            monthStartDay = monthStartDay
         )
     }
-    val reviewCount = remember(state.transactions, filter, pendingKeys) {
+    val reviewCount = remember(state.transactions, filter, pendingKeys, monthStartDay) {
         TransactionFilters.apply(
             state.transactions,
             filter.copy(needsReview = true),
             pendingInstrumentKeys = pendingKeys,
-            linkedAccounts = state.linkedAccounts
+            linkedAccounts = state.linkedAccounts,
+            monthStartDay = monthStartDay
         ).size
     }
     val grouped = remember(filtered) {
@@ -272,6 +275,7 @@ fun ActivityScreen(
             currencies = currencies,
             allTransactions = state.transactions,
             linkedAccounts = state.linkedAccounts,
+            monthStartDay = monthStartDay,
             onDismiss = { showFilters = false },
             onApply = {
                 updateFilter(it)

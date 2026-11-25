@@ -8,9 +8,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
 import com.example.smscosttracker.analysis.OriginalAmount
 import com.example.smscosttracker.analysis.RecurringSeries
 import com.example.smscosttracker.analysis.ShownTransactions
+import com.example.smscosttracker.data.OnboardingPreferences
 import com.example.smscosttracker.data.TransactionEntity
 import com.example.smscosttracker.data.TransactionRepository
 import kotlin.concurrent.thread
@@ -42,6 +44,13 @@ fun rememberTransactions(
         }
     }
     return TransactionListState(shown.transactions, loading, shown.originals, shown.linkedAccounts)
+}
+
+/** The day the user's month starts on, read again whenever [refreshKey] changes. */
+@Composable
+fun rememberMonthStartDay(refreshKey: Int): Int {
+    val context = LocalContext.current
+    return remember(context, refreshKey) { OnboardingPreferences(context).monthStartDay }
 }
 
 @Composable

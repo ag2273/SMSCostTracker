@@ -89,6 +89,7 @@ fun HomeScreen(
     onImport: () -> Unit
 ) {
     val state = rememberTransactions(repository, refreshKey)
+    val monthStartDay = rememberMonthStartDay(refreshKey)
     val recurring = rememberRecurringSeries(repository, refreshKey)
     val pending = rememberPendingCount(repository, refreshKey)
     val pendingKeys = rememberPendingInstrumentKeys(repository, refreshKey)
@@ -113,6 +114,12 @@ fun HomeScreen(
                     currencyInitialized = true
                 )
             )
+        }
+    }
+
+    LaunchedEffect(monthStartDay) {
+        if (filter.monthStartDay != monthStartDay) {
+            onFilterChange(filter.copy(monthStartDay = monthStartDay).current())
         }
     }
 

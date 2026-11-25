@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Themed-icon layer (Android 13+): the bubble with the bars cut out. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FF000000"
+        android:fillType="evenOdd"
+        android:pathData="M37,30H71A9,9 0,0 1,80 39V59A9,9 0,0 1,71 68H51L38,78L40,68H37A9,9 0,0 1,28 59V39A9,9 0,0 1,37 30Z M40,61V52A2,2 0,0 1,42 50H44A2,2 0,0 1,46 52V61Z M51,61V46A2,2 0,0 1,53 44H55A2,2 0,0 1,57 46V61Z M62,61V39A2,2 0,0 1,64 37H66A2,2 0,0 1,68 39V61Z" />
+</vector>
