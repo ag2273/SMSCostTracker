@@ -192,4 +192,21 @@ class SpendingAnalysisTest {
         assertEquals("EGP", summaries[1].currency)
     }
 
+
+    @Test
+    fun `monthly trend groups by the user's month`() {
+        val trend = SpendingAnalysis.monthlyTrend(
+            listOf(
+                transaction(1000L, Category.GROCERIES, "Carrefour", LocalDate.of(2026, 9, 21)),
+                transaction(2000L, Category.GROCERIES, "Panda", LocalDate.of(2026, 9, 22)),
+                transaction(500L, Category.GROCERIES, "Panda", LocalDate.of(2026, 10, 21))
+            ),
+            months = 2,
+            now = YearMonth.of(2026, 10),
+            zone = zone,
+            monthStartDay = 22
+        )
+
+        assertEquals(listOf(1000L, 2500L), trend.map { it.amountMinor })
+    }
 }

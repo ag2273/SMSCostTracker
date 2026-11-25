@@ -57,6 +57,9 @@ Offline aggregation and filtering of Transactions into lists and charts.
 ## Date range
 A filter over Transaction occurrence time: all time, a month, a quarter, or a custom start and end.
 
+## Month start day
+The day (1–28) the user's month starts on, set in Settings → Month, for example a salary day. With day 22 a month runs from the 22nd to the 21st of the next month. It is named after the calendar month most of its days fall in: with a start day after the 15th, 22 Oct – 21 Nov is "November"; with day 15 or earlier it takes the month it starts in. Home, Activity and Insights use it for months, quarters and the monthly trend.
+
 ## Recurring series
 Payments to one Merchant in one currency that repeat on a Cycle, found by Analysis from stored Transactions. It has a typical Amount (Fixed within ±5%, or Variable such as utilities), a last and next expected date, and a status: Active, Late (one expected payment missed) or Ended (two or more missed). A series is split by Account only when two series run at one Merchant on different cards. A pause longer than two cycles does not end a series; when payments resume, it is current again. Series that ended more than a year ago are not listed.
 

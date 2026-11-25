@@ -237,4 +237,22 @@ class TransactionFiltersTest {
 
         assertEquals(listOf("Transfer", "Panda"), result.map { it.merchant })
     }
+
+    @Test
+    fun `this and last month follow the month start day`() {
+        val transactions = listOf(
+            transaction(merchant = "Before", date = LocalDate.of(2026, 9, 21)),
+            transaction(merchant = "Last", date = LocalDate.of(2026, 9, 22)),
+            transaction(merchant = "LastEnd", date = LocalDate.of(2026, 10, 21)),
+            transaction(merchant = "This", date = LocalDate.of(2026, 10, 22))
+        )
+        val today = LocalDate.of(2026, 10, 25).atStartOfDay(zone).toInstant().toEpochMilli()
+
+        fun merchants(preset: DatePreset) = TransactionFilters.apply(
+            transactions, TransactionFilterState(preset = preset), today, zone, monthStartDay = 22
+        ).map { it.merchant }
+
+        assertEquals(listOf("This"), merchants(DatePreset.THIS_MONTH))
+        assertEquals(listOf("Last", "LastEnd"), merchants(DatePreset.LAST_MONTH))
+    }
 }

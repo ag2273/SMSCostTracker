@@ -212,7 +212,9 @@ private fun MainShell(
 ) {
     var tab by remember { mutableStateOf(0) }
     var settingsRoute by remember { mutableStateOf(SettingsRoute.OVERVIEW) }
-    var homeFilter by remember { mutableStateOf(HomeFilterState()) }
+    var homeFilter by remember {
+        mutableStateOf(HomeFilterState(monthStartDay = preferences.monthStartDay).current())
+    }
     var activityFilters by remember { mutableStateOf(ActivityFilterState()) }
     var showSubscriptions by remember { mutableStateOf(false) }
     var subscriptionsSeriesKey by remember { mutableStateOf<String?>(null) }

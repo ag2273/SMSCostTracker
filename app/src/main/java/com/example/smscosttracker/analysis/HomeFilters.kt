@@ -13,27 +13,39 @@ data class HomeFilterState(
     val anchor: YearMonth = YearMonth.now(),
     val currency: String? = null,
     val account: String? = null,
-    val currencyInitialized: Boolean = false
+    val currencyInitialized: Boolean = false,
+    /** The day the user's month starts on; [anchor] is then a month as [MonthCycle] names it. */
+    val monthStartDay: Int = 1
 ) {
-    val periodStart: LocalDate
-        get() {
-            val startMonth = when (unit) {
-                HomePeriodUnit.MONTH -> anchor.monthValue
-                HomePeriodUnit.QUARTER -> ((anchor.monthValue - 1) / 3) * 3 + 1
-            }
-            return LocalDate.of(anchor.year, startMonth, 1)
+    private val cycle: MonthCycle get() = MonthCycle.of(monthStartDay)
+
+    /** The first month of the period. */
+    private val firstMonth: YearMonth
+        get() = when (unit) {
+            HomePeriodUnit.MONTH -> anchor
+            HomePeriodUnit.QUARTER -> YearMonth.of(anchor.year, ((anchor.monthValue - 1) / 3) * 3 + 1)
         }
 
-    val periodEndExclusive: LocalDate
-        get() = periodStart.plusMonths(if (unit == HomePeriodUnit.MONTH) 1 else 3)
+    val periodStart: LocalDate
+        get() = cycle.start(firstMonth)
 
-    fun periodLabel(): String = when (unit) {
+    val periodEndExclusive: LocalDate
+        get() = cycle.start(firstMonth.plusMonths(if (unit == HomePeriodUnit.MONTH) 1 else 3))
+
+    private fun name(): String = when (unit) {
         HomePeriodUnit.MONTH -> anchor.format(DateTimeFormatter.ofPattern("MMMM yyyy", Locale.ENGLISH))
         HomePeriodUnit.QUARTER -> "Q${(anchor.monthValue - 1) / 3 + 1} ${anchor.year}"
     }
 
-    fun spendLabel(now: YearMonth = YearMonth.now()): String {
-        val currentStart = HomeFilterState(unit = unit, anchor = now).periodStart
+    /** "September 2026", with its dates when the month does not start on the 1st. */
+    fun periodLabel(): String =
+        cycle.rangeLabel(periodStart, periodEndExclusive)?.let { "${name()} · $it" } ?: name()
+
+    /** The same filter on the period that contains [today], for when the start day changes. */
+    fun current(today: LocalDate = LocalDate.now()): HomeFilterState = copy(anchor = cycle.monthOf(today))
+
+    fun spendLabel(today: LocalDate = LocalDate.now()): String {
+        val currentStart = current(today).periodStart
         return when {
             periodStart == currentStart && unit == HomePeriodUnit.MONTH -> "SPENT THIS MONTH"
             periodStart == currentStart && unit == HomePeriodUnit.QUARTER -> "SPENT THIS QUARTER"
@@ -42,7 +54,7 @@ data class HomeFilterState(
                     .uppercase(Locale.ENGLISH)
                 "SPENT IN $month ${anchor.year}"
             }
-            else -> "SPENT IN ${periodLabel().uppercase(Locale.ENGLISH)}"
+            else -> "SPENT IN ${name().uppercase(Locale.ENGLISH)}"
         }
     }
 
@@ -53,9 +65,8 @@ data class HomeFilterState(
         }
     )
 
-    fun canMoveForward(now: YearMonth = YearMonth.now()): Boolean {
-        val currentStart = HomeFilterState(unit = unit, anchor = now).periodStart
-        return periodStart < currentStart
+    fun canMoveForward(today: LocalDate = LocalDate.now()): Boolean {
+        return periodStart < current(today).periodStart
     }
 }
 
