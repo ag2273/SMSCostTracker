@@ -100,6 +100,7 @@ import com.example.smscosttracker.ui.components.DropdownChip
 import com.example.smscosttracker.ui.components.EmptyState
 import com.example.smscosttracker.ui.components.IconTile
 import com.example.smscosttracker.ui.components.LedgerCard
+import com.example.smscosttracker.ui.components.LedgerChip
 import com.example.smscosttracker.ui.components.LedgerDivider
 import com.example.smscosttracker.ui.components.LedgerTextButton
 import com.example.smscosttracker.ui.components.PageHeader
