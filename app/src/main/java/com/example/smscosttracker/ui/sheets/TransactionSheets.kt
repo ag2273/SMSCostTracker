@@ -67,6 +67,7 @@ import com.example.smscosttracker.ui.components.LedgerChip
 import com.example.smscosttracker.ui.components.LedgerDivider
 import com.example.smscosttracker.ui.components.LedgerTextButton
 import com.example.smscosttracker.ui.components.LedgerTextField
+import com.example.smscosttracker.ui.components.MultiSelectDropdownChip
 import com.example.smscosttracker.ui.components.Pill
 import com.example.smscosttracker.ui.components.PillTone
 import com.example.smscosttracker.ui.components.PrimaryButton
@@ -204,12 +205,12 @@ fun FiltersSheet(
             )
             Spacer(Modifier.height(18.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                DropdownChip(
-                    label = draft.account ?: "All accounts",
-                    options = listOf("All accounts") + accounts,
-                    onSelect = {
-                        draft = draft.copy(account = it.takeUnless { value -> value == "All accounts" })
-                    }
+                MultiSelectDropdownChip(
+                    label = TransactionFilters.accountsLabel(draft.accounts),
+                    allLabel = "All accounts",
+                    options = accounts,
+                    selected = draft.accounts,
+                    onChange = { draft = draft.copy(accounts = it) }
                 )
                 DropdownChip(
                     label = draft.currency ?: "All currencies",
