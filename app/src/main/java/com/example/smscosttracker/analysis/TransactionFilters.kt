@@ -23,7 +23,8 @@ enum class DatePreset(val label: String) {
 data class TransactionFilterState(
     val preset: DatePreset = DatePreset.ALL,
     val category: Category? = null,
-    val account: String? = null,
+    /** Accounts to keep; empty keeps every account. */
+    val accounts: Set<String> = emptySet(),
     val currency: String? = null,
     val merchantQuery: String = "",
     val customStart: LocalDate? = null,
@@ -32,6 +33,13 @@ data class TransactionFilterState(
 )
 
 object TransactionFilters {
+    /** "All accounts", the one account, or "3 accounts". */
+    fun accountsLabel(accounts: Set<String>): String = when (accounts.size) {
+        0 -> "All accounts"
+        1 -> accounts.single()
+        else -> "${accounts.size} accounts"
+    }
+
     fun labelFor(state: TransactionFilterState): String {
         val start = state.customStart
         if (state.preset != DatePreset.CUSTOM || start == null) return state.preset.label
@@ -56,8 +64,8 @@ object TransactionFilters {
             val inCategory = state.category == null ||
                 Category.fromStorage(transaction.category) == state.category
             // An account also covers the debit cards linked to it.
-            val inAccount = state.account == null || transaction.account == state.account ||
-                linkedAccounts[transaction.account] == state.account
+            val inAccount = state.accounts.isEmpty() || transaction.account in state.accounts ||
+                linkedAccounts[transaction.account] in state.accounts
             val inCurrency = state.currency == null || transaction.currency == state.currency
             val matchesMerchant = state.merchantQuery.isBlank() ||
                 transaction.merchant.contains(state.merchantQuery.trim(), ignoreCase = true)

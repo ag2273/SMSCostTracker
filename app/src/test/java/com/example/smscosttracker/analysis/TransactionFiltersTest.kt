@@ -155,7 +155,7 @@ class TransactionFiltersTest {
 
         val result = TransactionFilters.apply(
             transactions,
-            TransactionFilterState(account = "SAB 060"),
+            TransactionFilterState(accounts = setOf("SAB 060")),
             now,
             zone
         )
@@ -229,7 +229,7 @@ class TransactionFiltersTest {
 
         val result = TransactionFilters.apply(
             transactions,
-            TransactionFilterState(account = "SAB 001"),
+            TransactionFilterState(accounts = setOf("SAB 001")),
             now,
             zone,
             linkedAccounts = mapOf("SAB 1214" to "SAB 001")
@@ -254,5 +254,32 @@ class TransactionFiltersTest {
 
         assertEquals(listOf("This"), merchants(DatePreset.THIS_MONTH))
         assertEquals(listOf("Last", "LastEnd"), merchants(DatePreset.LAST_MONTH))
+    }
+
+    @Test
+    fun `several accounts keep each of them and their linked cards`() {
+        val transactions = listOf(
+            transaction(merchant = "Transfer", account = "SAB 001"),
+            transaction(merchant = "Panda", account = "SAB 1214"),
+            transaction(merchant = "Amazon", account = "SAB 5521"),
+            transaction(merchant = "Noon", account = "CIB 7781")
+        )
+
+        val result = TransactionFilters.apply(
+            transactions,
+            TransactionFilterState(accounts = setOf("SAB 001", "CIB 7781")),
+            now,
+            zone,
+            linkedAccounts = mapOf("SAB 1214" to "SAB 001")
+        )
+
+        assertEquals(listOf("Transfer", "Panda", "Noon"), result.map { it.merchant })
+    }
+
+    @Test
+    fun `accounts label names one account and counts several`() {
+        assertEquals("All accounts", TransactionFilters.accountsLabel(emptySet()))
+        assertEquals("SAB 001", TransactionFilters.accountsLabel(setOf("SAB 001")))
+        assertEquals("2 accounts", TransactionFilters.accountsLabel(setOf("SAB 001", "CIB 7781")))
     }
 }

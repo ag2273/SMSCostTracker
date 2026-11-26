@@ -321,7 +321,7 @@ private fun countFilters(filter: TransactionFilterState, firstCurrency: String?)
     var count = 0
     if (filter.preset != DatePreset.THIS_MONTH) count++
     if (filter.category != null) count++
-    if (filter.account != null) count++
+    if (filter.accounts.isNotEmpty()) count++
     if (filter.currency != null && filter.currency != firstCurrency) count++
     if (filter.merchantQuery.isNotBlank()) count++
     if (filter.needsReview) count++

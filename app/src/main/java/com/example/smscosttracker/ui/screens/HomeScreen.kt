@@ -54,11 +54,11 @@ import com.example.smscosttracker.data.TransactionRepository
 import com.example.smscosttracker.ui.components.Avatar
 import com.example.smscosttracker.ui.components.CategoryChart
 import com.example.smscosttracker.ui.components.ChannelIcon
-import com.example.smscosttracker.ui.components.DropdownChip
 import com.example.smscosttracker.ui.components.EmptyState
 import com.example.smscosttracker.ui.components.LedgerCard
 import com.example.smscosttracker.ui.components.LedgerChip
 import com.example.smscosttracker.ui.components.LedgerDivider
+import com.example.smscosttracker.ui.components.MultiSelectDropdownChip
 import com.example.smscosttracker.ui.components.PageHeader
 import com.example.smscosttracker.ui.components.Pill
 import com.example.smscosttracker.ui.components.PillTone
@@ -126,7 +126,7 @@ fun HomeScreen(
     val rangeFilter = TransactionFilterState(
         preset = DatePreset.CUSTOM,
         currency = currency,
-        account = filter.account,
+        accounts = filter.accounts,
         customStart = filter.periodStart,
         customEnd = filter.periodEndExclusive.minusDays(1)
     )
@@ -201,14 +201,12 @@ fun HomeScreen(
                             )
                         }
                     }
-                    DropdownChip(
-                        label = filter.account ?: "All accounts",
-                        options = listOf("All accounts") + accounts,
-                        onSelect = { selected ->
-                            onFilterChange(
-                                filter.copy(account = selected.takeUnless { it == "All accounts" })
-                            )
-                        }
+                    MultiSelectDropdownChip(
+                        label = TransactionFilters.accountsLabel(filter.accounts),
+                        allLabel = "All accounts",
+                        options = accounts,
+                        selected = filter.accounts,
+                        onChange = { onFilterChange(filter.copy(accounts = it)) }
                     )
                 }
                 Spacer(Modifier.height(14.dp))

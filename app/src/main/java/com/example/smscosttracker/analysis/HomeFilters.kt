@@ -12,7 +12,8 @@ data class HomeFilterState(
     val unit: HomePeriodUnit = HomePeriodUnit.MONTH,
     val anchor: YearMonth = YearMonth.now(),
     val currency: String? = null,
-    val account: String? = null,
+    /** Accounts to show; empty shows every account. */
+    val accounts: Set<String> = emptySet(),
     val currencyInitialized: Boolean = false,
     /** The day the user's month starts on; [anchor] is then a month as [MonthCycle] names it. */
     val monthStartDay: Int = 1

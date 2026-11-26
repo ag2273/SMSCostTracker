@@ -23,6 +23,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AccountBalance
 import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.CheckBox
+import androidx.compose.material.icons.outlined.CheckBoxOutlineBlank
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.CreditCard
@@ -511,6 +513,70 @@ fun DropdownChip(
             }
         }
     }
+}
+
+/**
+ * A chip whose menu toggles several [options] on and off; [allLabel] clears the choice. The menu
+ * stays open while toggling so more than one can be picked.
+ */
+@Composable
+fun MultiSelectDropdownChip(
+    label: String,
+    allLabel: String,
+    options: List<String>,
+    selected: Set<String>,
+    onChange: (Set<String>) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box(modifier = modifier) {
+        Surface(
+            modifier = Modifier.clickable { expanded = true },
+            shape = RoundedCornerShape(99.dp),
+            color = if (selected.isEmpty()) Ledger.Surface else Ledger.PrimarySoft,
+            border = BorderStroke(1.dp, if (selected.isEmpty()) Ledger.Outline else Ledger.Primary)
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(label, style = MaterialTheme.typography.labelMedium, color = Ledger.Ink, maxLines = 1, softWrap = false)
+                Icon(Icons.Outlined.KeyboardArrowDown, contentDescription = null, tint = Ledger.Muted, modifier = Modifier.size(14.dp))
+            }
+        }
+        androidx.compose.material3.DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            androidx.compose.material3.DropdownMenuItem(
+                text = { Text(allLabel, style = MaterialTheme.typography.bodySmall) },
+                leadingIcon = { MenuCheck(checked = selected.isEmpty()) },
+                onClick = {
+                    expanded = false
+                    onChange(emptySet())
+                }
+            )
+            options.forEach { option ->
+                val checked = option in selected
+                androidx.compose.material3.DropdownMenuItem(
+                    text = { Text(option, style = MaterialTheme.typography.bodySmall) },
+                    leadingIcon = { MenuCheck(checked = checked) },
+                    onClick = { onChange(if (checked) selected - option else selected + option) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun MenuCheck(checked: Boolean) {
+    Icon(
+        if (checked) Icons.Outlined.CheckBox else Icons.Outlined.CheckBoxOutlineBlank,
+        contentDescription = if (checked) "Selected" else "Not selected",
+        tint = if (checked) Ledger.Primary else Ledger.Muted,
+        modifier = Modifier.size(18.dp)
+    )
 }
 
 @Composable
